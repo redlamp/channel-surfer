@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ImageUp, LibraryBig, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BreakdownCanvas } from "@/components/breakdown-canvas";
+import { ColorReadout } from "@/components/color-readout";
+import { ColorSteps } from "@/components/color-steps";
 import { LibraryPanel } from "@/components/library-panel";
 import { SettingsPanel } from "@/components/settings-panel";
 import { useSourceStore } from "@/stores/source-store";
@@ -49,15 +51,18 @@ export function SurferApp() {
       }}
     >
       <header className="flex items-center justify-between gap-4 border-b border-border px-4 py-3 md:px-6">
-        <div>
+        <div className="shrink-0">
           <h1 className="font-mono text-xl font-semibold tracking-tight">
-            Channel Surfer
+            Channel Surfer <span aria-hidden>🌈🏄</span>
           </h1>
           <p className="text-base text-muted-foreground">
             How RGB and HSB channels build an image
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="min-w-0 flex-1">
+          <ColorReadout />
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
           <Button onClick={() => fileInputRef.current?.click()}>
             <ImageUp aria-hidden />
             Open images
@@ -94,8 +99,11 @@ export function SurferApp() {
       </header>
 
       <main className="relative flex min-h-0 flex-1 gap-4 p-4 md:p-6">
-        <div className="min-h-0 min-w-0 flex-1">
-          <BreakdownCanvas />
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
+          <div className="min-h-0 flex-1">
+            <BreakdownCanvas />
+          </div>
+          <ColorSteps />
         </div>
         {libraryOpen && <LibraryPanel />}
         {dragging && (

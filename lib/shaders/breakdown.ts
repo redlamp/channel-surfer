@@ -35,6 +35,10 @@ uniform float uRgbColorize;
 // Hovered tile index, or -1 for none. The hover outline is drawn here in
 // the fragment shader (an overlay line object flashed on remount).
 uniform float uHoverTile;
+// 0 = HSB (saturation/brightness tiles), 1 = HSL (saturation/lightness).
+uniform float uColorModel;
+// Hue-map rendering: 0 warm/cool accents, 1 proximity glow, 2 distance bands.
+uniform float uHueMapStyle;
 // Outline half-width in intra-tile UV units per axis, precomputed on CPU
 // from camera zoom so the line stays a constant screen width.
 uniform vec2 uOutlineUv;
@@ -82,6 +86,16 @@ vec3 hsv2rgb(vec3 c) {
   return vec3(v, p, q);
 }
 
+/* RGB in [0,1] -> HSL (h, s, l each in [0,1]) */
+vec3 rgb2hsl(vec3 c) {
+  float cmax = max(c.r, max(c.g, c.b));
+  float cmin = min(c.r, min(c.g, c.b));
+  float delta = cmax - cmin;
+  float l = (cmax + cmin) * 0.5;
+  float s = (delta == 0.0) ? 0.0 : delta / (1.0 - abs(2.0 * l - 1.0));
+  return vec3(rgb2hsv(c).x, s, l);
+}
+
 vec3 linearToSRGB(vec3 lin) {
   vec3 lo = lin * 12.92;
   vec3 hi = pow(abs(lin), vec3(1.0 / 2.4)) * 1.055 - 0.055;
@@ -119,47 +133,55 @@ vec3 imageMaxSatMaxVal(vec3 color) {
   return hsv2rgb(hsv);
 }
 
-/* Tile 3 — hue distance from a target hue, white -> warm/cool accent ->
-   black, with near-greys suppressed. */
+/* Tile 3 — hue distance from a target hue. Three styles (uHueMapStyle):
+   0 warm/cool directional accents, 1 proximity glow (pixel keeps its own
+   hue, brightness = closeness), 2 posterized distance bands. Near-greys
+   are suppressed to black in all styles. */
 vec3 imageHue(vec3 color) {
   vec3 hsv = rgb2hsv(color);
   float hue = hsv.x;
   float sat = hsv.y;
+  float satThresh = 0.01;
+  float mask = step(satThresh, sat);
 
-  // Tunables (future settings-panel candidates).
-  float targetHue  = uTargetHue;
-  vec3 coolAccent  = hsv2rgb(vec3(200.0 / 360.0, 0.66, 0.5));
-  vec3 warmAccent  = hsv2rgb(vec3( 40.0 / 360.0, 0.66, 0.5));
-  float satThresh  = 0.01;
-  float accentPeak = 0.5;
-  float accentSoft = 0.5;
-
-  // Signed shortest hue difference in [-0.5, 0.5].
-  float signedDelta = fract(hue - targetHue + 0.5) - 0.5;
-
-  // Distance from target mapped to 0..1 (0 at target, 1 at opposite).
+  // Signed shortest hue difference in [-0.5, 0.5], and its magnitude
+  // mapped to 0..1 (0 at target, 1 at the opposite hue).
+  float signedDelta = fract(hue - uTargetHue + 0.5) - 0.5;
   float u = clamp(abs(signedDelta) * 2.0, 0.0, 1.0);
 
-  vec3 accent = (signedDelta < 0.0) ? warmAccent : coolAccent;
+  vec3 outCol;
+  if (uHueMapStyle < 0.5) {
+    vec3 coolAccent  = hsv2rgb(vec3(200.0 / 360.0, 0.66, 0.5));
+    vec3 warmAccent  = hsv2rgb(vec3( 40.0 / 360.0, 0.66, 0.5));
+    float accentPeak = 0.5;
+    float accentSoft = 0.5;
+    vec3 accent = (signedDelta < 0.0) ? warmAccent : coolAccent;
+    float t1 = smoothstep(0.0, accentPeak, u);
+    float t2 = smoothstep(accentPeak, min(1.0, accentPeak + accentSoft), u);
+    vec3 mid = mix(vec3(1.0), accent, t1);
+    outCol = mix(mid, vec3(0.0), t2);
+  } else if (uHueMapStyle < 1.5) {
+    float closeness = 1.0 - u;
+    outCol = hsv2rgb(vec3(hue, 1.0, closeness * closeness));
+  } else {
+    float bands = 6.0;
+    float v = floor((1.0 - u) * bands) / (bands - 1.0);
+    outCol = vec3(clamp(v, 0.0, 1.0));
+  }
 
-  float t1 = smoothstep(0.0, accentPeak, u);
-  float t2 = smoothstep(accentPeak, min(1.0, accentPeak + accentSoft), u);
-
-  vec3 mid    = mix(vec3(1.0), accent, t1);
-  vec3 outCol = mix(mid, vec3(0.0), t2);
-
-  float mask = step(satThresh, sat);
   return mix(vec3(0.0), outCol, mask);
 }
 
-/* Tile 4 — saturation as grayscale. */
+/* Tile 4 — saturation as grayscale (HSB or HSL per uColorModel). */
 vec3 imageSat(vec3 color) {
-  return vec3(rgb2hsv(color).y);
+  float s = uColorModel < 0.5 ? rgb2hsv(color).y : rgb2hsl(color).y;
+  return vec3(s);
 }
 
-/* Tile 5 — value/brightness as grayscale. */
+/* Tile 5 — brightness (HSB) or lightness (HSL) as grayscale. */
 vec3 imageVal(vec3 color) {
-  return vec3(rgb2hsv(color).z);
+  float v = uColorModel < 0.5 ? rgb2hsv(color).z : rgb2hsl(color).z;
+  return vec3(v);
 }
 
 void main() {
