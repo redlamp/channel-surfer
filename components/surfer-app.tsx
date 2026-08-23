@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ImageUp, Undo2 } from "lucide-react";
+import { ImageUp, Settings2, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BreakdownCanvas } from "@/components/breakdown-canvas";
+import { SettingsPanel } from "@/components/settings-panel";
 import { useSourceStore } from "@/stores/source-store";
 
 export function SurferApp() {
@@ -11,6 +12,7 @@ export function SurferApp() {
     useSourceStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => {
     void hydrate();
@@ -60,6 +62,14 @@ export function SurferApp() {
             <ImageUp aria-hidden />
             Open image
           </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Settings"
+            onClick={() => setSettingsOpen(true)}
+          >
+            <Settings2 aria-hidden />
+          </Button>
           <input
             ref={fileInputRef}
             type="file"
@@ -92,6 +102,10 @@ export function SurferApp() {
           Images stay on your device
         </p>
       </footer>
+      <SettingsPanel
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+      />
     </div>
   );
 }
