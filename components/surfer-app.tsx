@@ -6,12 +6,6 @@ import { Button } from "@/components/ui/button";
 import { BreakdownCanvas } from "@/components/breakdown-canvas";
 import { useSourceStore } from "@/stores/source-store";
 
-const TILE_LABELS = [
-  ["Source", "Hue · mid sat", "Hue · max sat"],
-  ["Hue map", "Saturation", "Brightness"],
-  ["Red", "Green", "Blue"],
-];
-
 export function SurferApp() {
   const { name, width, height, isDemo, error, hydrate, loadFile, resetToDemo } =
     useSourceStore();
@@ -79,14 +73,9 @@ export function SurferApp() {
         </div>
       </header>
 
-      <main className="relative flex min-h-0 flex-1 flex-col gap-3 p-4 md:p-6">
+      <main className="relative flex min-h-0 flex-1 flex-col p-4 md:p-6">
         <div className="min-h-0 flex-1">
           <BreakdownCanvas />
-        </div>
-        <div className="grid w-full grid-cols-3 gap-x-2 text-center font-mono text-base text-muted-foreground">
-          {TILE_LABELS.flat().map((label) => (
-            <span key={label}>{label}</span>
-          ))}
         </div>
         {dragging && (
           <div className="pointer-events-none absolute inset-2 z-10 flex items-center justify-center rounded-lg border-2 border-dashed border-primary bg-background/80">

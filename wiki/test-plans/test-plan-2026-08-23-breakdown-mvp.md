@@ -19,3 +19,18 @@ Run `bun run dev` → http://localhost:7847
 - [ ] Drop a non-image file → footer shows a readable error, app keeps
       working
 - [ ] Portrait-orientation image → grid is portrait, no stretching
+
+## Tile interactivity (added later on 2026-08-23)
+
+- [ ] Hovering any tile shows a white outline around it and a floating
+      label above the canvas naming the tile (the old label grid is gone)
+- [ ] Hovering the Hue map tile: cursor becomes a crosshair with a center
+      gap; the hue map recalibrates so the hovered pixel's hue reads as
+      white, easing smoothly as you move
+- [ ] Moving off the Hue map tile: the map tweens back to the 180° target
+      (not a snap)
+- [ ] Hovering a grey pixel on the hue map holds the current target
+      instead of jumping
+- [ ] Double-click a tile → camera tweens to frame just that tile;
+      double-click it again → tweens back to the full grid
+- [ ] Grabbing/panning mid-tween cancels the tween without fighting you
