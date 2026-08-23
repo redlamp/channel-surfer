@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Crosshair, MapPin } from "lucide-react";
+import { Circle, Crosshair } from "lucide-react";
 import { rgbToHex, rgbToHsb, rgbToHsl } from "@/lib/color";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useUiStore, type SampledColor } from "@/stores/ui-store";
@@ -47,15 +47,12 @@ function ValueCell({
 
 function ReadoutRow({
   sample,
-  active,
   icon,
   title,
 }: {
-  /** Values to display — the live sample, or a held/placeholder one. */
+  /** Live sample, or null — a null row renders blank but keeps its
+   * space, so the header's visual targets never move. */
   sample: SampledColor | null;
-  /** False renders the row dimmed and non-interactive, keeping the
-   * layout target in place when nothing is hovered/pinned. */
-  active: boolean;
   icon: React.ReactNode;
   title: string;
 }) {
@@ -69,9 +66,11 @@ function ReadoutRow({
     return () => window.clearTimeout(t);
   }, [copied]);
 
-  const { r, g, b } = sample ?? { r: 128, g: 128, b: 128 };
+  const has = sample !== null;
+  const { r, g, b } = sample ?? { r: 0, g: 0, b: 0 };
   const hex = rgbToHex(r, g, b);
-  const fmt = (v: number) => (rgbFloat ? (v / 255).toFixed(3) : String(v));
+  const fmt = (v: number) =>
+    has ? (rgbFloat ? (v / 255).toFixed(3) : String(v)) : "";
   const rgbWidth = rgbFloat ? 5 : 3;
   const hsx =
     colorModel === "hsb"
@@ -88,41 +87,43 @@ function ReadoutRow({
     <button
       type="button"
       title={`${title} — copy hex`}
-      disabled={!active}
+      disabled={!has}
       onClick={() => {
         void navigator.clipboard?.writeText(hex).then(() => setCopied(true));
       }}
       className={cn(
         "flex cursor-pointer items-center gap-2 rounded-md px-2 py-0.5 font-mono text-base whitespace-pre transition-opacity hover:bg-muted",
-        active ? "opacity-100" : "pointer-events-none opacity-40",
+        has ? "opacity-100" : "pointer-events-none opacity-40",
       )}
     >
       <span className="text-muted-foreground">{icon}</span>
       <span
         className="size-4 shrink-0 rounded-sm border border-border"
-        style={{ backgroundColor: hex }}
+        style={{ backgroundColor: has ? hex : "transparent" }}
       />
-      <span className="w-[7ch] text-left">{copied ? "Copied!" : hex}</span>
+      <span className="w-[7ch] text-left">
+        {copied ? "Copied!" : has ? hex : ""}
+      </span>
       <span className="font-bold">RGB</span>
-      <ValueCell text={fmt(r)} frac={r / 255} widthCh={rgbWidth} bar="r" />
-      <ValueCell text={fmt(g)} frac={g / 255} widthCh={rgbWidth} bar="g" />
-      <ValueCell text={fmt(b)} frac={b / 255} widthCh={rgbWidth} bar="b" />
+      <ValueCell text={fmt(r)} frac={has ? r / 255 : 0} widthCh={rgbWidth} bar="r" />
+      <ValueCell text={fmt(g)} frac={has ? g / 255 : 0} widthCh={rgbWidth} bar="g" />
+      <ValueCell text={fmt(b)} frac={has ? b / 255 : 0} widthCh={rgbWidth} bar="b" />
       <span className="font-bold">{hsx.label}</span>
       <ValueCell
-        text={`${hsx.h}°`}
-        frac={hsx.h / 360}
+        text={has ? `${hsx.h}°` : ""}
+        frac={has ? hsx.h / 360 : 0}
         widthCh={4}
         bar="neutral"
       />
       <ValueCell
-        text={`${hsx.s}%`}
-        frac={hsx.s / 100}
+        text={has ? `${hsx.s}%` : ""}
+        frac={has ? hsx.s / 100 : 0}
         widthCh={4}
         bar="neutral"
       />
       <ValueCell
-        text={`${hsx.x}%`}
-        frac={hsx.x / 100}
+        text={has ? `${hsx.x}%` : ""}
+        frac={has ? hsx.x / 100 : 0}
         widthCh={4}
         bar="neutral"
       />
@@ -134,20 +135,17 @@ function ReadoutRow({
  * rows; clicking a row copies its hex. */
 export function ColorReadout() {
   const hoverColor = useUiStore((s) => s.hoverColor);
-  const lastHoverColor = useUiStore((s) => s.lastHoverColor);
   const pinnedColor = useUiStore((s) => s.pinnedColor);
 
   return (
     <div className="flex flex-col items-end gap-0.5">
       <ReadoutRow
         sample={pinnedColor}
-        active={pinnedColor !== null}
-        icon={<MapPin className="size-4" aria-hidden />}
+        icon={<Circle className="size-4" aria-hidden />}
         title="Pinned color"
       />
       <ReadoutRow
-        sample={hoverColor ?? lastHoverColor}
-        active={hoverColor !== null}
+        sample={hoverColor}
         icon={<Crosshair className="size-4" aria-hidden />}
         title="Hovered color"
       />
