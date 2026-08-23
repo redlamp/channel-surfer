@@ -29,6 +29,9 @@ uniform sampler2D uSource;
 // Hue-map focal hue in [0,1]. 0.5 (180 deg) at rest; while the cursor is
 // over the hue-map tile it tracks the hovered pixel's hue (tweened on CPU).
 uniform float uTargetHue;
+// 0 = RGB channel tiles render black-to-white; 1 = black-to-channel-color.
+// Tweened on CPU so the click toggle cross-fades.
+uniform float uRgbColorize;
 
 /* RGB in [0,1] -> HSV (h, s, v each in [0,1]) */
 vec3 rgb2hsv(vec3 c) {
@@ -170,9 +173,9 @@ void main() {
   else if (tileIndex == 3) color = imageHue(color);
   else if (tileIndex == 4) color = imageSat(color);
   else if (tileIndex == 5) color = imageVal(color);
-  else if (tileIndex == 6) color = vec3(color.r);
-  else if (tileIndex == 7) color = vec3(color.g);
-  else                     color = vec3(color.b);
+  else if (tileIndex == 6) color = mix(vec3(color.r), vec3(color.r, 0.0, 0.0), uRgbColorize);
+  else if (tileIndex == 7) color = mix(vec3(color.g), vec3(0.0, color.g, 0.0), uRgbColorize);
+  else                     color = mix(vec3(color.b), vec3(0.0, 0.0, color.b), uRgbColorize);
 
   gl_FragColor = vec4(linearToSRGB(color), 1.0);
 }
