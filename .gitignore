@@ -39,3 +39,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# obsidian vault workspace state
+wiki/.obsidian/
+
+# remember plugin session data
+.remember/

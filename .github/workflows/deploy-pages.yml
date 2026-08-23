@@ -1,0 +1,85 @@
+# Deploys the static export to GitHub Pages on every push to main.
+# Two slots in one artifact: main at /channel-surf, dev at
+# /channel-surf/dev (best-effort — a broken dev never blocks production).
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Build main slot
+        run: bun run build
+        env:
+          NEXT_OUTPUT_EXPORT: "1"
+          NEXT_PUBLIC_BASE_PATH: /channel-surf
+
+      - name: Stage main slot
+        run: |
+          mkdir -p site
+          cp -r out/* site/
+
+      - name: Checkout dev
+        id: dev-checkout
+        continue-on-error: true
+        uses: actions/checkout@v4
+        with:
+          ref: dev
+          path: dev-src
+
+      - name: Build dev slot
+        id: dev-build
+        continue-on-error: true
+        if: steps.dev-checkout.outcome == 'success'
+        working-directory: dev-src
+        run: |
+          bun install --frozen-lockfile
+          NEXT_OUTPUT_EXPORT=1 NEXT_PUBLIC_BASE_PATH=/channel-surf/dev bun run build
+          mkdir -p ../site/dev
+          cp -r out/* ../site/dev/
+
+      - name: Finalize artifact
+        run: touch site/.nojekyll
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
