@@ -1,19 +1,20 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Canvas,
   useFrame,
   useThree,
   type ThreeEvent,
 } from "@react-three/fiber";
-import { Line, MapControls } from "@react-three/drei";
+import { MapControls } from "@react-three/drei";
 import * as THREE from "three";
 import {
   breakdownFragmentShader,
   breakdownVertexShader,
 } from "@/lib/shaders/breakdown";
 import { useSourceStore } from "@/stores/source-store";
+import { useSettingsStore } from "@/stores/settings-store";
 
 /** World-space height of the 3x3 grid plane; width is aspect x this. */
 const PLANE_H = 1;
@@ -95,42 +96,8 @@ function pixelHue(data: Uint8ClampedArray, i: number): number | null {
   return h < 0 ? h + 1 : h;
 }
 
-function HoverOutline({
-  tile,
-  aspect,
-}: {
-  tile: number | null;
-  aspect: number;
-}) {
-  const points = useMemo(() => {
-    if (tile === null) return null;
-    const r = tileRect(tile, aspect);
-    const x0 = r.cx - r.w / 2;
-    const x1 = r.cx + r.w / 2;
-    const y0 = r.cy - r.h / 2;
-    const y1 = r.cy + r.h / 2;
-    return [
-      [x0, y0, 0.01],
-      [x1, y0, 0.01],
-      [x1, y1, 0.01],
-      [x0, y1, 0.01],
-      [x0, y0, 0.01],
-    ] as [number, number, number][];
-  }, [tile, aspect]);
-
-  if (!points) return null;
-  return (
-    <Line
-      points={points}
-      color="white"
-      lineWidth={2}
-      transparent
-      opacity={0.9}
-      renderOrder={1}
-      depthTest={false}
-    />
-  );
-}
+/** Hover outline width in screen pixels (drawn in the fragment shader). */
+const OUTLINE_PX = 2;
 
 function BreakdownScene({
   url,
@@ -155,7 +122,21 @@ function BreakdownScene({
   const viewGoalRef = useRef<ViewGoal | null>(null);
   const zoomedTileRef = useRef<number | null>(null);
   const rgbColorizeGoalRef = useRef(0);
+  const hoverTileRef = useRef<number | null>(null);
   const clickTimerRef = useRef<number | null>(null);
+
+  // Settings drive shader behavior: colorize cross-fades via the tween
+  // loop, and the hover ref feeds the outline uniform each frame.
+  const rgbColorize = useSettingsStore((s) => s.rgbColorize);
+  useEffect(() => {
+    rgbColorizeGoalRef.current = rgbColorize ? 1 : 0;
+    invalidate();
+  }, [rgbColorize, invalidate]);
+
+  useEffect(() => {
+    hoverTileRef.current = hoverTile;
+    invalidate();
+  }, [hoverTile, invalidate]);
 
   useEffect(
     () => () => {
@@ -258,6 +239,16 @@ function BreakdownScene({
 
     const mat = materialRef.current;
     if (mat) {
+      // Hover outline: tile index plus a constant-screen-width edge, both
+      // refreshed every rendered frame (zoom changes arrive here too).
+      mat.uniforms.uHoverTile.value = hoverTileRef.current ?? -1;
+      if (state.camera instanceof THREE.OrthographicCamera) {
+        const worldPerPx = 1 / state.camera.zoom;
+        mat.uniforms.uOutlineUv.value.set(
+          (OUTLINE_PX * worldPerPx) / ((aspect * PLANE_H) / 3),
+          (OUTLINE_PX * worldPerPx) / (PLANE_H / 3),
+        );
+      }
       const cur = mat.uniforms.uTargetHue.value as number;
       const goal = hueGoalRef.current;
       const d = hueDelta(cur, goal);
@@ -311,7 +302,10 @@ function BreakdownScene({
     if (!e.uv) return;
     const { tile, u, v } = tileFromUv(e.uv);
     onHoverTile(tile);
-    if (tile === HUE_MAP_TILE && imageDataRef.current) {
+    const mode = useSettingsStore.getState().highlightMode;
+    const picking =
+      mode === "all" || (mode === "tile" && tile === HUE_MAP_TILE);
+    if (picking && imageDataRef.current) {
       const id = imageDataRef.current;
       const px = Math.min(Math.floor(u * id.width), id.width - 1);
       const py = Math.min(Math.floor((1 - v) * id.height), id.height - 1);
@@ -340,8 +334,8 @@ function BreakdownScene({
       window.clearTimeout(clickTimerRef.current);
     clickTimerRef.current = window.setTimeout(() => {
       clickTimerRef.current = null;
-      rgbColorizeGoalRef.current = rgbColorizeGoalRef.current === 1 ? 0 : 1;
-      invalidate();
+      const s = useSettingsStore.getState();
+      s.setRgbColorize(!s.rgbColorize);
     }, CLICK_DELAY_MS);
   };
 
@@ -391,12 +385,13 @@ function BreakdownScene({
             uSource: { value: texture },
             uTargetHue: { value: DEFAULT_TARGET_HUE },
             uRgbColorize: { value: 0 },
+            uHoverTile: { value: -1 },
+            uOutlineUv: { value: new THREE.Vector2() },
           }}
           depthTest={false}
           depthWrite={false}
         />
       </mesh>
-      <HoverOutline tile={hoverTile} aspect={aspect} />
     </>
   );
 }
@@ -430,7 +425,13 @@ export function BreakdownCanvas() {
   const url = useSourceStore((s) => s.url);
   const width = useSourceStore((s) => s.width);
   const height = useSourceStore((s) => s.height);
+  const highlightMode = useSettingsStore((s) => s.highlightMode);
   const [hoverTile, setHoverTile] = useState<number | null>(null);
+
+  const picking =
+    hoverTile !== null &&
+    (highlightMode === "all" ||
+      (highlightMode === "tile" && hoverTile === HUE_MAP_TILE));
 
   if (!url) {
     return (
@@ -443,9 +444,7 @@ export function BreakdownCanvas() {
   return (
     <div
       className="relative h-full w-full cursor-grab overflow-hidden rounded-md border border-border active:cursor-grabbing"
-      style={
-        hoverTile === HUE_MAP_TILE ? { cursor: RETICLE_CURSOR } : undefined
-      }
+      style={picking ? { cursor: RETICLE_CURSOR } : undefined}
     >
       <Canvas
         orthographic

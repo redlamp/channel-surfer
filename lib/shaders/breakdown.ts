@@ -32,6 +32,12 @@ uniform float uTargetHue;
 // 0 = RGB channel tiles render black-to-white; 1 = black-to-channel-color.
 // Tweened on CPU so the click toggle cross-fades.
 uniform float uRgbColorize;
+// Hovered tile index, or -1 for none. The hover outline is drawn here in
+// the fragment shader (an overlay line object flashed on remount).
+uniform float uHoverTile;
+// Outline half-width in intra-tile UV units per axis, precomputed on CPU
+// from camera zoom so the line stays a constant screen width.
+uniform vec2 uOutlineUv;
 
 /* RGB in [0,1] -> HSV (h, s, v each in [0,1]) */
 vec3 rgb2hsv(vec3 c) {
@@ -177,6 +183,15 @@ void main() {
   else if (tileIndex == 7) color = mix(vec3(color.g), vec3(0.0, color.g, 0.0), uRgbColorize);
   else                     color = mix(vec3(color.b), vec3(0.0, 0.0, color.b), uRgbColorize);
 
-  gl_FragColor = vec4(linearToSRGB(color), 1.0);
+  color = linearToSRGB(color);
+
+  if (uHoverTile > -0.5 && tileIndex == int(uHoverTile + 0.5)) {
+    bool onEdge =
+      tileUv.x < uOutlineUv.x || tileUv.x > 1.0 - uOutlineUv.x ||
+      tileUv.y < uOutlineUv.y || tileUv.y > 1.0 - uOutlineUv.y;
+    if (onEdge) color = vec3(1.0);
+  }
+
+  gl_FragColor = vec4(color, 1.0);
 }
 `;
