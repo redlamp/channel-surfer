@@ -15,8 +15,9 @@ varying vec2 vUv;
 
 void main() {
   vUv = uv;
-  // Fullscreen quad from a 2x2 plane, camera-independent.
-  gl_Position = vec4(position.xy, 0.0, 1.0);
+  // World-space plane under an orthographic camera, so MapControls
+  // pan/zoom applies (and future displacement work gets a real camera).
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
 }
 `;
 
