@@ -37,8 +37,13 @@ uniform float uRgbColorize;
 uniform float uHoverTile;
 // 0 = HSB (saturation/brightness tiles), 1 = HSL (saturation/lightness).
 uniform float uColorModel;
-// Hue-map rendering: 0 warm/cool accents, 1 proximity glow, 2 distance bands.
+// Hue-map rendering: 0 warm/cool accents, 1 proximity glow (with quarter-
+// turn landmark rings), 2 twilight-style cyclic ramp, 3 four-landmark
+// diamond, 4 crawling distance bands (direction = crawl sign).
+// Styles 2-4 come from wiki/research/hue-direction-encoding.md.
 uniform float uHueMapStyle;
+// Seconds, monotonically increasing; only the crawl style consumes it.
+uniform float uTime;
 // Intra-tile UV units per screen pixel, per axis — computed on CPU from
 // camera zoom so outlines and rings keep constant screen size.
 uniform vec2 uUvPerPx;
@@ -172,26 +177,54 @@ vec3 imageHue(vec3 color) {
     vec3 mid = mix(vec3(1.0), accent, t1);
     outCol = mix(mid, vec3(0.0), t2);
   } else if (uHueMapStyle < 1.5) {
+    // Proximity glow: pixel keeps its own hue, brightness = closeness,
+    // with faint landmark rings at the quarter turns (|delta| = 90 deg).
     float closeness = 1.0 - u;
     outCol = hsv2rgb(vec3(hue, 1.0, closeness * closeness));
+    float lm = 1.0 - smoothstep(0.0, 0.02, abs(u - 0.5));
+    outCol = mix(outCol, vec3(1.0), lm * 0.35);
+  } else if (uHueMapStyle < 2.5) {
+    // Twilight-class cyclic ramp: white at target, lightness-matched
+    // blue (CW) vs red (CCW) arms converging on one dark at the antipode.
+    vec3 whiteC = vec3(0.92);
+    vec3 blueC  = vec3(0.32, 0.44, 0.76);
+    vec3 redC   = vec3(0.76, 0.36, 0.31);
+    vec3 darkC  = vec3(0.11, 0.07, 0.15);
+    vec3 arm = (signedDelta < 0.0) ? redC : blueC;
+    float t1 = smoothstep(0.0, 0.5, u);
+    float t2 = smoothstep(0.5, 1.0, u);
+    outCol = mix(mix(whiteC, arm, t1), darkC, t2);
+  } else if (uHueMapStyle < 3.5) {
+    // Four-landmark diamond: white -> teal (+1/4 turn) -> black (opposite)
+    // <- magenta (-1/4 turn) <- white; equal-lightness accents.
+    vec3 tealC = vec3(0.0, 0.55, 0.52);
+    vec3 magC  = vec3(0.72, 0.15, 0.62);
+    vec3 arm = (signedDelta < 0.0) ? magC : tealC;
+    float t1 = smoothstep(0.0, 0.5, u);
+    float t2 = smoothstep(0.5, 1.0, u);
+    outCol = mix(mix(vec3(1.0), arm, t1), vec3(0.0), t2);
   } else {
-    float bands = 6.0;
-    float v = floor((1.0 - u) * bands) / (bands - 1.0);
-    outCol = vec3(clamp(v, 0.0, 1.0));
+    // Crawling bands: grayscale distance, stripes crawl; the two rotation
+    // directions crawl opposite ways, so sign reads even at the antipode.
+    float base = 1.0 - u;
+    float stripe = 0.5 + 0.5 *
+      cos(6.2831853 * (abs(signedDelta) * 6.0 - uTime * 0.6 * sign(signedDelta)));
+    outCol = vec3(base * (0.65 + 0.35 * stripe));
   }
 
   return mix(vec3(0.0), outCol, mask);
 }
 
-/* Tile 4 — saturation as grayscale (HSB or HSL per uColorModel). */
+/* Tile 4 — saturation as grayscale. uColorModel is eased on CPU, so the
+   tile cross-fades between the HSB and HSL definitions. */
 vec3 imageSat(vec3 color) {
-  float s = uColorModel < 0.5 ? rgb2hsv(color).y : rgb2hsl(color).y;
+  float s = mix(rgb2hsv(color).y, rgb2hsl(color).y, uColorModel);
   return vec3(s);
 }
 
-/* Tile 5 — brightness (HSB) or lightness (HSL) as grayscale. */
+/* Tile 5 — brightness (HSB) to lightness (HSL), same cross-fade. */
 vec3 imageVal(vec3 color) {
-  float v = uColorModel < 0.5 ? rgb2hsv(color).z : rgb2hsl(color).z;
+  float v = mix(rgb2hsv(color).z, rgb2hsl(color).z, uColorModel);
   return vec3(v);
 }
 

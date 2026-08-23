@@ -141,6 +141,9 @@ export function SurferApp() {
           <ColorSteps />
         </div>
         {libraryOpen && <LibraryPanel />}
+        {settingsOpen && (
+          <SettingsPanel onClose={() => setSettingsOpen(false)} />
+        )}
         {dragging && (
           <div className="pointer-events-none absolute inset-2 z-10 flex items-center justify-center rounded-lg border-2 border-dashed border-primary bg-background/80">
             <p className="text-lg font-medium">Drop images to surf them</p>
@@ -156,10 +159,6 @@ export function SurferApp() {
           Images stay on your device
         </p>
       </footer>
-      <SettingsPanel
-        open={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
-      />
     </div>
   );
 }

@@ -1,7 +1,6 @@
 "use client";
 
 import { X } from "lucide-react";
-import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
@@ -22,7 +21,7 @@ function Segmented<T extends string>({
   onChange: (value: T) => void;
 }) {
   return (
-    <div className="flex rounded-lg border border-border bg-surface-inset p-0.5">
+    <div className="flex flex-wrap rounded-lg border border-border bg-surface-inset p-0.5">
       {options.map((o) => (
         <button
           key={o.value}
@@ -30,7 +29,7 @@ function Segmented<T extends string>({
           aria-pressed={value === o.value}
           onClick={() => onChange(o.value)}
           className={cn(
-            "flex-1 cursor-pointer rounded-md px-3 py-1 text-base transition-colors",
+            "flex-1 cursor-pointer rounded-md px-2.5 py-1 text-base whitespace-nowrap transition-colors",
             value === o.value
               ? "bg-primary text-primary-foreground shadow-[var(--shadow-sm)]"
               : "text-muted-foreground hover:text-foreground",
@@ -56,23 +55,18 @@ const COLOR_MODEL_OPTIONS: { value: ColorModel; label: string }[] = [
 
 const HUE_STYLE_OPTIONS: { value: HueMapStyle; label: string }[] = [
   { value: "warmcool", label: "Warm/cool" },
+  { value: "twilight", label: "Twilight" },
   { value: "glow", label: "Glow" },
-  { value: "bands", label: "Bands" },
+  { value: "diamond", label: "Diamond" },
+  { value: "crawl", label: "Crawl" },
 ];
 
 /**
- * Settings as a right-edge sheet (the color-taylor pattern), but
- * non-modal: no scrim and no focus trap, so it reads as a sidebar like
- * the Media Library — the settings are judged by watching the canvas
- * respond while you toggle them.
+ * Settings as an inline sidebar, a sibling of the Media Library panel —
+ * both can be open side by side, and the canvas stays interactive so
+ * settings are judged live.
  */
-export function SettingsPanel({
-  open,
-  onClose,
-}: {
-  open: boolean;
-  onClose: () => void;
-}) {
+export function SettingsPanel({ onClose }: { onClose: () => void }) {
   const highlightMode = useSettingsStore((s) => s.highlightMode);
   const setHighlightMode = useSettingsStore((s) => s.setHighlightMode);
   const rgbColorize = useSettingsStore((s) => s.rgbColorize);
@@ -87,139 +81,123 @@ export function SettingsPanel({
   const setRgbFloat = useSettingsStore((s) => s.setRgbFloat);
 
   return (
-    <DialogPrimitive.Root
-      open={open}
-      modal={false}
-      onOpenChange={(next) => {
-        if (!next) onClose();
-      }}
-    >
-      <DialogPrimitive.Portal>
-        <DialogPrimitive.Popup
-          className={
-            "fixed top-0 right-0 bottom-0 z-50 flex w-[min(88vw,380px)] flex-col " +
-            "border-l border-border bg-background shadow-[var(--shadow-lg)] outline-none duration-200 " +
-            "data-open:animate-in data-open:slide-in-from-right " +
-            "data-closed:animate-out data-closed:slide-out-to-right"
-          }
+    <aside className="flex w-80 shrink-0 flex-col overflow-hidden rounded-md border border-border bg-card shadow-[var(--shadow-sm)]">
+      <div className="flex items-center justify-between border-b border-border px-3 py-2">
+        <h2 className="text-base font-semibold">Settings</h2>
+        <button
+          type="button"
+          aria-label="Close settings"
+          className="cursor-pointer select-none rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+          onClick={onClose}
         >
-          <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
-            <DialogPrimitive.Title className="text-base font-semibold">
-              Settings
-            </DialogPrimitive.Title>
-            <DialogPrimitive.Close
-              aria-label="Close settings"
-              className="cursor-pointer select-none rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-            >
-              <X className="size-4" />
-            </DialogPrimitive.Close>
-          </div>
+          <X className="size-4" />
+        </button>
+      </div>
 
-          <div className="flex-1 space-y-6 overflow-y-auto px-4 py-4">
-            <div className="space-y-2">
-              <Label>Hue highlight on hover</Label>
-              <Segmented
-                value={highlightMode}
-                options={HIGHLIGHT_OPTIONS}
-                onChange={setHighlightMode}
-              />
-              <p className="text-base text-muted-foreground">
-                Recalibrates the hue map so the hovered pixel&apos;s hue reads
-                as white.
-              </p>
-            </div>
+      <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-3 py-4">
+        <div className="space-y-2">
+          <Label>Hue highlight on hover</Label>
+          <Segmented
+            value={highlightMode}
+            options={HIGHLIGHT_OPTIONS}
+            onChange={setHighlightMode}
+          />
+          <p className="text-base text-muted-foreground">
+            Recalibrates the hue map so the hovered pixel&apos;s hue reads as
+            white.
+          </p>
+        </div>
 
-            <div className="space-y-2">
-              <Label>Tint (RGB channel tiles)</Label>
-              <Segmented
-                value={rgbColorize ? "color" : "gray"}
-                options={[
-                  { value: "gray", label: "Black to white" },
-                  { value: "color", label: "Black to color" },
-                ]}
-                onChange={(v) => setRgbColorize(v === "color")}
-              />
-              <p className="text-base text-muted-foreground">
-                The Tint bar under a hovered RGB tile toggles this too.
-              </p>
-            </div>
+        <div className="space-y-2">
+          <Label>Hue map style</Label>
+          <Segmented
+            value={hueMapStyle}
+            options={HUE_STYLE_OPTIONS}
+            onChange={setHueMapStyle}
+          />
+          <p className="text-base text-muted-foreground">
+            The four research candidates plus the original: warm/cool
+            accents, twilight cyclic ramp, glow with quarter-turn landmarks,
+            four-landmark diamond, or crawling bands (direction = motion).
+          </p>
+        </div>
 
-            <div className="space-y-2">
-              <Label>Color model</Label>
-              <Segmented
-                value={colorModel}
-                options={COLOR_MODEL_OPTIONS}
-                onChange={setColorModel}
-              />
-              <p className="text-base text-muted-foreground">
-                Switches the saturation and brightness/lightness tiles and
-                the readouts.
-              </p>
-            </div>
+        <div className="space-y-2">
+          <Label>Tint (RGB channel tiles)</Label>
+          <Segmented
+            value={rgbColorize ? "color" : "gray"}
+            options={[
+              { value: "gray", label: "Black to white" },
+              { value: "color", label: "Black to color" },
+            ]}
+            onChange={(v) => setRgbColorize(v === "color")}
+          />
+          <p className="text-base text-muted-foreground">
+            The Tint bar under a hovered RGB tile toggles this too.
+          </p>
+        </div>
 
-            <div className="space-y-2">
-              <Label>Hue map style</Label>
-              <Segmented
-                value={hueMapStyle}
-                options={HUE_STYLE_OPTIONS}
-                onChange={setHueMapStyle}
-              />
-              <p className="text-base text-muted-foreground">
-                Warm/cool accents by direction, glow by closeness in the
-                pixel&apos;s own hue, or posterized distance bands.
-              </p>
-            </div>
+        <div className="space-y-2">
+          <Label>Color model</Label>
+          <Segmented
+            value={colorModel}
+            options={COLOR_MODEL_OPTIONS}
+            onChange={setColorModel}
+          />
+          <p className="text-base text-muted-foreground">
+            Switches the saturation and brightness/lightness tiles and the
+            readouts.
+          </p>
+        </div>
 
-            <div className="space-y-2">
-              <Label>RGB values</Label>
-              <Segmented
-                value={rgbFloat ? "float" : "int"}
-                options={[
-                  { value: "int", label: "0–255" },
-                  { value: "float", label: "0.0–1.0" },
-                ]}
-                onChange={(v) => setRgbFloat(v === "float")}
-              />
-              <p className="text-base text-muted-foreground">
-                How the readout rows print RGB channels.
-              </p>
-            </div>
+        <div className="space-y-2">
+          <Label>RGB values</Label>
+          <Segmented
+            value={rgbFloat ? "float" : "int"}
+            options={[
+              { value: "int", label: "0–255" },
+              { value: "float", label: "0.0–1.0" },
+            ]}
+            onChange={(v) => setRgbFloat(v === "float")}
+          />
+          <p className="text-base text-muted-foreground">
+            How the readout rows print RGB channels.
+          </p>
+        </div>
 
-            <div className="space-y-2">
-              <Label>Color steps</Label>
-              <Segmented
-                value={showColorSteps ? "show" : "hide"}
-                options={[
-                  { value: "hide", label: "Hide" },
-                  { value: "show", label: "Show" },
-                ]}
-                onChange={(v) => setShowColorSteps(v === "show")}
-              />
-              <p className="text-base text-muted-foreground">
-                The color-taylor hex and HSB/HSL derivation for the hovered
-                pixel, below the canvas.
-              </p>
-            </div>
-          </div>
+        <div className="space-y-2">
+          <Label>Color steps</Label>
+          <Segmented
+            value={showColorSteps ? "show" : "hide"}
+            options={[
+              { value: "hide", label: "Hide" },
+              { value: "show", label: "Show" },
+            ]}
+            onChange={(v) => setShowColorSteps(v === "show")}
+          />
+          <p className="text-base text-muted-foreground">
+            The color-taylor hex and HSB/HSL derivation for the hovered
+            pixel, below the canvas.
+          </p>
+        </div>
+      </div>
 
-          <div className="border-t border-border px-4 py-2.5">
-            <Button
-              variant="secondary"
-              className="w-full"
-              onClick={() => {
-                setHighlightMode("tile");
-                setRgbColorize(false);
-                setColorModel("hsb");
-                setHueMapStyle("warmcool");
-                setShowColorSteps(false);
-                setRgbFloat(false);
-              }}
-            >
-              Reset to defaults
-            </Button>
-          </div>
-        </DialogPrimitive.Popup>
-      </DialogPrimitive.Portal>
-    </DialogPrimitive.Root>
+      <div className="border-t border-border px-3 py-2">
+        <Button
+          variant="secondary"
+          className="w-full"
+          onClick={() => {
+            setHighlightMode("tile");
+            setRgbColorize(false);
+            setColorModel("hsb");
+            setHueMapStyle("warmcool");
+            setShowColorSteps(false);
+            setRgbFloat(false);
+          }}
+        >
+          Reset to defaults
+        </Button>
+      </div>
+    </aside>
   );
 }
