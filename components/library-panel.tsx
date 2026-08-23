@@ -149,6 +149,7 @@ function SelectionDetails() {
             value={details.progressive ? "Progressive" : "Baseline"}
           />
         )}
+        {details && <DetailRow label="Color space" value={details.colorSpace} />}
         {size != null && (
           <DetailRow label="File size" value={formatBytes(size)} />
         )}

@@ -81,6 +81,10 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
   const setRgbFloat = useSettingsStore((s) => s.setRgbFloat);
   const labs = useSettingsStore((s) => s.labs);
   const setLabs = useSettingsStore((s) => s.setLabs);
+  const showColorHexagon = useSettingsStore((s) => s.showColorHexagon);
+  const setShowColorHexagon = useSettingsStore((s) => s.setShowColorHexagon);
+  const colorMath = useSettingsStore((s) => s.colorMath);
+  const setColorMath = useSettingsStore((s) => s.setColorMath);
 
   return (
     <aside className="flex w-80 shrink-0 flex-col overflow-hidden rounded-md border border-border bg-card shadow-[var(--shadow-sm)]">
@@ -171,6 +175,38 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="space-y-2">
+          <Label>Color math</Label>
+          <Segmented
+            value={colorMath}
+            options={[
+              { value: "linear", label: "Linear light" },
+              { value: "srgb", label: "sRGB" },
+            ]}
+            onChange={setColorMath}
+          />
+          <p className="text-base text-muted-foreground">
+            Linear is the Gigi original; sRGB matches how the readouts and
+            most tools compute HSB.
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Hexagon</Label>
+          <Segmented
+            value={showColorHexagon ? "show" : "hide"}
+            options={[
+              { value: "hide", label: "Hide" },
+              { value: "show", label: "Show" },
+            ]}
+            onChange={(v) => setShowColorHexagon(v === "show")}
+          />
+          <p className="text-base text-muted-foreground">
+            The color-taylor hue/saturation hexagon with hover and pin
+            markers, below the canvas.
+          </p>
+        </div>
+
+        <div className="space-y-2">
           <Label>Color steps</Label>
           <Segmented
             value={showColorSteps ? "show" : "hide"}
@@ -198,6 +234,8 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
             setHueMapStyle("twilight");
             setShowColorSteps(false);
             setRgbFloat(false);
+            setShowColorHexagon(false);
+            setColorMath("linear");
           }}
         >
           Reset to defaults
