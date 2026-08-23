@@ -453,10 +453,11 @@ const TILE_NAMES = [
   "Blue",
 ];
 
-// Crosshair with a center gap so the focused pixel stays visible while
-// hue-picking; white over a black halo so it reads on any tile color.
-const RETICLE_SVG = `<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'><g fill='none' stroke-linecap='round'><g stroke='black' stroke-width='4'><path d='M12 3v6M12 15v6M3 12h6M15 12h6'/></g><g stroke='white' stroke-width='2'><path d='M12 3v6M12 15v6M3 12h6M15 12h6'/></g></g></svg>`;
-const RETICLE_CURSOR = `url("data:image/svg+xml,${encodeURIComponent(RETICLE_SVG)}") 12 12, crosshair`;
+// Crosshair with a wide center gap so the focused area stays visible
+// while hue-picking; white over a black halo so it reads on any color.
+// 32px canvas, ticks 2..9 / 23..30 leave a 14px clear window at center.
+const RETICLE_SVG = `<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'><g fill='none' stroke-linecap='round'><g stroke='black' stroke-width='4'><path d='M16 2v7M16 23v7M2 16h7M23 16h7'/></g><g stroke='white' stroke-width='2'><path d='M16 2v7M16 23v7M2 16h7M23 16h7'/></g></g></svg>`;
+const RETICLE_CURSOR = `url("data:image/svg+xml,${encodeURIComponent(RETICLE_SVG)}") 16 16, crosshair`;
 
 /**
  * The 3x3 breakdown grid on a pan/zoom canvas: drag to pan, wheel to zoom

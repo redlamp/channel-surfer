@@ -18,11 +18,21 @@ interface SettingsState {
 export const useSettingsStore = create<SettingsState>()(
   persist(
     (set) => ({
-      highlightMode: "all",
+      highlightMode: "tile",
       rgbColorize: false,
       setHighlightMode: (highlightMode) => set({ highlightMode }),
       setRgbColorize: (rgbColorize) => set({ rgbColorize }),
     }),
-    { name: "channel-surfer:settings" },
+    {
+      name: "channel-surfer:settings",
+      // v1: default highlightMode changed "all" -> "tile"; migrate stored
+      // v0 state so existing browsers pick up the new default once.
+      version: 1,
+      migrate: (persisted, version) => {
+        const state = persisted as Partial<SettingsState>;
+        if (version === 0) state.highlightMode = "tile";
+        return state as SettingsState;
+      },
+    },
   ),
 );
