@@ -7,8 +7,43 @@ import { useSettingsStore } from "@/stores/settings-store";
 import { useUiStore, type SampledColor } from "@/stores/ui-store";
 import { cn } from "@/lib/utils";
 
-/** Fixed-width number so changing digit counts never shifts the row. */
-const pad = (v: number, width = 3) => String(v).padStart(width, " ");
+/* Channel ink colors, matching the color-steps panel. */
+const BAR_CLASSES = {
+  r: "bg-[#ff4444]",
+  g: "bg-[#44ee44]",
+  b: "bg-[rgb(96,96,255)]",
+  neutral: "bg-foreground/60",
+} as const;
+
+/** A value with a magnitude bar underneath (the Gigi comp treatment). */
+function ValueCell({
+  text,
+  frac,
+  widthCh,
+  bar,
+}: {
+  text: string;
+  frac: number;
+  widthCh: number;
+  bar: keyof typeof BAR_CLASSES;
+}) {
+  return (
+    <span
+      className="flex shrink-0 flex-col gap-px"
+      style={{ width: `${widthCh}ch` }}
+    >
+      <span className="text-right leading-tight text-muted-foreground">
+        {text}
+      </span>
+      <span className="h-[3px] w-full overflow-hidden rounded-full bg-muted">
+        <span
+          className={cn("block h-full rounded-full", BAR_CLASSES[bar])}
+          style={{ width: `${Math.round(Math.min(Math.max(frac, 0), 1) * 100)}%` }}
+        />
+      </span>
+    </span>
+  );
+}
 
 function ReadoutRow({
   sample,
@@ -16,10 +51,11 @@ function ReadoutRow({
   title,
 }: {
   sample: SampledColor | null;
-  icon: ReturnType<typeof Crosshair> extends never ? never : React.ReactNode;
+  icon: React.ReactNode;
   title: string;
 }) {
   const colorModel = useSettingsStore((s) => s.colorModel);
+  const rgbFloat = useSettingsStore((s) => s.rgbFloat);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
@@ -32,15 +68,17 @@ function ReadoutRow({
   // changes height as samples come and go.
   const { r, g, b } = sample ?? { r: 0, g: 0, b: 0 };
   const hex = rgbToHex(r, g, b);
-  const model =
+  const fmt = (v: number) => (rgbFloat ? (v / 255).toFixed(3) : String(v));
+  const rgbWidth = rgbFloat ? 5 : 3;
+  const hsx =
     colorModel === "hsb"
       ? (() => {
           const { h, s, b: v } = rgbToHsb(r, g, b);
-          return `HSB ${pad(h)}° ${pad(s)}% ${pad(v)}%`;
+          return { label: "HSB", h, s, x: v };
         })()
       : (() => {
           const { h, s, l } = rgbToHsl(r, g, b);
-          return `HSL ${pad(h)}° ${pad(s)}% ${pad(l)}%`;
+          return { label: "HSL", h, s, x: l };
         })();
 
   return (
@@ -62,10 +100,29 @@ function ReadoutRow({
         style={{ backgroundColor: hex }}
       />
       <span className="w-[7ch] text-left">{copied ? "Copied!" : hex}</span>
-      <span className="text-muted-foreground">
-        RGB {pad(r)} {pad(g)} {pad(b)}
-      </span>
-      <span className="text-muted-foreground">{model}</span>
+      <span className="font-bold">RGB</span>
+      <ValueCell text={fmt(r)} frac={r / 255} widthCh={rgbWidth} bar="r" />
+      <ValueCell text={fmt(g)} frac={g / 255} widthCh={rgbWidth} bar="g" />
+      <ValueCell text={fmt(b)} frac={b / 255} widthCh={rgbWidth} bar="b" />
+      <span className="font-bold">{hsx.label}</span>
+      <ValueCell
+        text={`${hsx.h}°`}
+        frac={hsx.h / 360}
+        widthCh={4}
+        bar="neutral"
+      />
+      <ValueCell
+        text={`${hsx.s}%`}
+        frac={hsx.s / 100}
+        widthCh={4}
+        bar="neutral"
+      />
+      <ValueCell
+        text={`${hsx.x}%`}
+        frac={hsx.x / 100}
+        widthCh={4}
+        bar="neutral"
+      />
     </button>
   );
 }
@@ -77,7 +134,7 @@ export function ColorReadout() {
   const pinnedColor = useUiStore((s) => s.pinnedColor);
 
   return (
-    <div className="flex flex-col items-end">
+    <div className="flex flex-col items-end gap-0.5">
       <ReadoutRow
         sample={pinnedColor}
         icon={<MapPin className="size-4" aria-hidden />}
