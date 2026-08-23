@@ -14,6 +14,7 @@ import {
   breakdownFragmentShader,
   breakdownVertexShader,
 } from "@/lib/shaders/breakdown";
+import { HexagonInner } from "@/components/color-hexagon";
 import { useSourceStore } from "@/stores/source-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { canvasBridge, useUiStore } from "@/stores/ui-store";
@@ -147,6 +148,8 @@ function BreakdownScene({
   const lastRgbHoverAtRef = useRef(0);
   const pinDragRef = useRef(false);
   const pinHoverRef = useRef(false);
+  const pointerPosRef = useRef<{ x: number; y: number } | null>(null);
+  const hexCardPosRef = useRef<{ x: number; y: number } | null>(null);
 
   // Hand the DOM shell a way to request frames (tint bar handlers).
   useEffect(() => {
@@ -417,6 +420,40 @@ function BreakdownScene({
       }
     }
 
+    // Hexagon hover card: loosely follows the cursor, flipping to the
+    // quadrant opposite the pointer so the image stays unobstructed.
+    const card = canvasBridge.hexCardEl;
+    if (card) {
+      const p = pointerPosRef.current;
+      const wanted =
+        p !== null &&
+        hoverTileRef.current !== null &&
+        useSettingsStore.getState().showColorHexagon;
+      if (wanted && p) {
+        const cw = card.offsetWidth || 200;
+        const chh = card.offsetHeight || 200;
+        const gap = 28;
+        const tx = p.x > state.size.width / 2 ? p.x - cw - gap : p.x + gap;
+        const ty = p.y > state.size.height / 2 ? p.y - chh - gap : p.y + gap;
+        const gx = Math.min(Math.max(tx, 8), state.size.width - cw - 8);
+        const gy = Math.min(Math.max(ty, 8), state.size.height - chh - 8);
+        let cur = hexCardPosRef.current;
+        if (!cur) {
+          cur = { x: gx, y: gy };
+          hexCardPosRef.current = cur;
+        }
+        const k = 1 - Math.exp(-9 * dt);
+        cur.x += (gx - cur.x) * k;
+        cur.y += (gy - cur.y) * k;
+        card.style.display = "block";
+        card.style.transform = `translate(${cur.x}px, ${cur.y}px)`;
+        if (Math.hypot(gx - cur.x, gy - cur.y) > 0.5) active = true;
+      } else {
+        card.style.display = "none";
+        hexCardPosRef.current = null;
+      }
+    }
+
     if (active) invalidate();
   });
 
@@ -451,6 +488,10 @@ function BreakdownScene({
 
   const onPointerMove = (e: ThreeEvent<PointerEvent>) => {
     if (!e.uv) return;
+    pointerPosRef.current = {
+      x: e.nativeEvent.offsetX,
+      y: e.nativeEvent.offsetY,
+    };
     const { tile, u, v } = tileFromUv(e.uv);
     if (pinDragRef.current) {
       setPinAt(u, v);
@@ -495,6 +536,7 @@ function BreakdownScene({
   const onPointerOut = () => {
     onHoverTile(null);
     hoverUvRef.current = null;
+    pointerPosRef.current = null;
     if (!pinDragRef.current) {
       pinHoverRef.current = false;
       onCursor("reticle");
@@ -770,6 +812,7 @@ export function BreakdownCanvas() {
   const isolate = useUiStore((s) => s.isolate);
   const setIsolate = useUiStore((s) => s.setIsolate);
   const setCanvasEl = useUiStore((s) => s.setCanvasEl);
+  const showColorHexagon = useSettingsStore((s) => s.showColorHexagon);
   const [hoverTile, setHoverTile] = useState<number | null>(null);
   const [cursor, setCursor] = useState<CanvasCursor>("reticle");
 
@@ -860,6 +903,19 @@ export function BreakdownCanvas() {
           </button>
         )}
       </div>
+
+      {/* Hexagon hover card: positioned per-frame by the scene. */}
+      {showColorHexagon && (
+        <div
+          ref={(el) => {
+            canvasBridge.hexCardEl = el;
+          }}
+          style={{ display: "none" }}
+          className="pointer-events-none absolute left-0 top-0 z-20 rounded-lg border border-border bg-popover/95 p-1.5 shadow-[var(--shadow-lg)]"
+        >
+          <HexagonInner />
+        </div>
+      )}
 
       {/* Tint bar: positioned below the hovered RGB tile by the scene. */}
       <div

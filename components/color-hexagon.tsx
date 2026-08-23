@@ -1,14 +1,12 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { rgbToHsb } from "@/lib/color";
-import { useSettingsStore } from "@/stores/settings-store";
 import { useUiStore, type SampledColor } from "@/stores/ui-store";
 
 /** Circumradius of the hexagon in CSS px (corners sit on this circle). */
-const R = 96;
+const R = 72;
 /** Room around the hexagon for the corner labels. */
-const PAD = 24;
+const PAD = 20;
 const BOX = (R + PAD) * 2;
 
 const DEG = Math.PI / 180;
@@ -21,7 +19,7 @@ function hexRadius(thetaDeg: number) {
 }
 
 function hsvToRgb255(h01: number, s: number): [number, number, number] {
-  const h = ((h01 % 1) + 1) % 1 * 6;
+  const h = (((h01 % 1) + 1) % 1) * 6;
   const i = Math.floor(h);
   const f = h - i;
   const p = 1 - s;
@@ -51,30 +49,46 @@ const CORNER_LABELS: { deg: number; text: string; color: string }[] = [
   { deg: 300, text: "M", color: "#ee55ee" },
 ];
 
-/** Marker position (CSS px within the box) for a sampled color. */
-function markerPos(sample: SampledColor) {
-  const { h, s } = rgbToHsb(sample.r, sample.g, sample.b);
-  const r = (s / 100) * hexRadius(h);
-  return {
-    left: R + PAD + r * Math.cos(h * DEG),
-    top: R + PAD - r * Math.sin(h * DEG),
-  };
+/** The three channel vectors at full strength — stems and handle rings
+ * share these, matching color-taylor's CHANNEL_COLOR. */
+const CHANNEL_COLOR = { r: "#ff0000", g: "#00ff00", b: "#0000ff" } as const;
+
+/** Channel directions: R toward 0°, G toward 120°, B toward 240° (screen
+ * y down). Chaining (r,g,b)/255 along these lands on the color's spot in
+ * the hexagon — white sums to the center, primaries to their corners. */
+const CH_DIR = {
+  r: [Math.cos(0), -Math.sin(0)],
+  g: [Math.cos(120 * DEG), -Math.sin(120 * DEG)],
+  b: [Math.cos(240 * DEG), -Math.sin(240 * DEG)],
+} as const;
+
+const CENTER = R + PAD;
+
+/** The chained stem points [origin, +R, +G, +B] for a sample. */
+function stemPoints(sample: SampledColor) {
+  const pts: { x: number; y: number }[] = [{ x: CENTER, y: CENTER }];
+  let x = CENTER;
+  let y = CENTER;
+  for (const ch of ["r", "g", "b"] as const) {
+    const f = (sample[ch] / 255) * R;
+    x += CH_DIR[ch][0] * f;
+    y += CH_DIR[ch][1] * f;
+    pts.push({ x, y });
+  }
+  return pts;
 }
 
-/**
- * The color-taylor Hexagon, non-interactive: the HSB hue/saturation plane
- * as a flat-top hexagon (primaries at the corners, white at center), with
- * markers for the hovered and pinned samples. Brightness is not shown.
- */
-export function ColorHexagon() {
-  const show = useSettingsStore((s) => s.showColorHexagon);
+/** The hexagon wheel with color-taylor's channel-vector stems: red, green,
+ * and blue segments chain from the center dot to the sample's position,
+ * each tipped with a channel-ringed dot. Rendered inside the hover card
+ * that BreakdownCanvas positions each frame. */
+export function HexagonInner() {
   const hoverColor = useUiStore((s) => s.hoverColor);
   const pinnedColor = useUiStore((s) => s.pinnedColor);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   // The wheel itself is static — rasterize once at 2x.
   useEffect(() => {
-    if (!show) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const scale = 2;
@@ -103,54 +117,87 @@ export function ColorHexagon() {
       }
     }
     ctx.putImageData(img, 0, 0);
-  }, [show]);
+  }, []);
 
-  if (!show) return null;
+  const stems = hoverColor ? stemPoints(hoverColor) : null;
+  const pinPos = pinnedColor
+    ? stemPoints(pinnedColor)[3]
+    : null;
 
   return (
-    <div className="shrink-0 rounded-lg border border-border bg-card p-2 shadow-[var(--shadow-sm)]">
-      <p className="px-1 pb-1 font-sans text-base font-semibold text-foreground">
-        Hexagon
-      </p>
-      <div className="relative" style={{ width: BOX, height: BOX }}>
-        {/* Circumscribed circle through the corners. */}
-        <div
-          className="absolute rounded-full border border-border"
-          style={{ left: PAD, top: PAD, width: R * 2, height: R * 2 }}
-        />
-        <canvas
-          ref={canvasRef}
-          className="absolute"
-          style={{ left: PAD, top: PAD, width: R * 2, height: R * 2 }}
-        />
-        {CORNER_LABELS.map((l) => (
-          <span
-            key={l.text}
-            className="absolute -translate-x-1/2 -translate-y-1/2 font-mono text-base font-bold"
-            style={{
-              color: l.color,
-              left: R + PAD + (R + 12) * Math.cos(l.deg * DEG),
-              top: R + PAD - (R + 12) * Math.sin(l.deg * DEG),
-            }}
-          >
-            {l.text}
-          </span>
-        ))}
-        {pinnedColor && (
-          <span
-            className="absolute size-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-[0_0_0_1.5px_rgba(0,0,0,0.85)]"
-            style={markerPos(pinnedColor)}
-            title="Pinned color"
+    <div className="relative" style={{ width: BOX, height: BOX }}>
+      <div
+        className="absolute rounded-full border border-border"
+        style={{ left: PAD, top: PAD, width: R * 2, height: R * 2 }}
+      />
+      <canvas
+        ref={canvasRef}
+        className="absolute"
+        style={{ left: PAD, top: PAD, width: R * 2, height: R * 2 }}
+      />
+      {CORNER_LABELS.map((l) => (
+        <span
+          key={l.text}
+          className="absolute -translate-x-1/2 -translate-y-1/2 font-mono text-base font-bold"
+          style={{
+            color: l.color,
+            left: CENTER + (R + 11) * Math.cos(l.deg * DEG),
+            top: CENTER - (R + 11) * Math.sin(l.deg * DEG),
+          }}
+        >
+          {l.text}
+        </span>
+      ))}
+      <svg
+        className="absolute inset-0"
+        width={BOX}
+        height={BOX}
+        viewBox={`0 0 ${BOX} ${BOX}`}
+      >
+        {pinPos && (
+          <circle
+            cx={pinPos.x}
+            cy={pinPos.y}
+            r={6}
+            fill="none"
+            stroke="white"
+            strokeWidth={2}
+            style={{ filter: "drop-shadow(0 0 1px rgba(0,0,0,0.9))" }}
           />
         )}
-        {hoverColor && (
-          <span
-            className="absolute size-2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white bg-white/40 shadow-[0_0_0_1px_rgba(0,0,0,0.85)]"
-            style={markerPos(hoverColor)}
-            title="Hovered color"
-          />
+        {stems && (
+          <g style={{ filter: "drop-shadow(0 1px 1.5px rgba(0,0,0,0.5))" }}>
+            {(["r", "g", "b"] as const).map((ch, i) => (
+              <line
+                key={ch}
+                x1={stems[i].x}
+                y1={stems[i].y}
+                x2={stems[i + 1].x}
+                y2={stems[i + 1].y}
+                stroke={CHANNEL_COLOR[ch]}
+                strokeWidth={2}
+                strokeLinecap="round"
+              />
+            ))}
+            {(["r", "g", "b"] as const).map(
+              (ch, i) =>
+                (hoverColor as SampledColor)[ch] > 0 && (
+                  <circle
+                    key={`${ch}-dot`}
+                    cx={stems[i + 1].x}
+                    cy={stems[i + 1].y}
+                    r={4}
+                    fill="transparent"
+                    stroke={CHANNEL_COLOR[ch]}
+                    strokeWidth={2}
+                  />
+                ),
+            )}
+            <circle cx={CENTER} cy={CENTER} r={2.5} fill="#ff0000" />
+          </g>
         )}
-      </div>
+      </svg>
     </div>
   );
 }
+
