@@ -58,9 +58,33 @@ Run `bun run dev` → http://localhost:7847
       the selection (try a PNG and a JPEG; JPEG should also show
       Baseline/Progressive)
 - [ ] Refresh: library, selection, and settings all survive
-- [ ] While zoomed into a tile: arrow keys SNAP to the neighboring tile
-      (no tween; clamped at grid edges, page never scrolls); double-click
-      still returns to the full grid with its tween
+
+## Big batch (late 2026-08-23)
+
+- [ ] Header title reads "Channel Surfer 🏄🌈"; hover + pinned colors show
+      as two stable rows (no jitter as digits change); click copies hex
+- [ ] HSB↔HSL setting flips tiles 4/5, the readout rows, and the steps
+- [ ] "Color steps" setting shows the equations strip under the canvas
+- [ ] Hue map style setting: warm/cool vs glow vs bands, live
+- [ ] Crosshair cursor everywhere over the canvas
+- [ ] Hover shows a small 50%-alpha echo ring at the matching spot on the
+      other eight tiles; rings look smooth (no jaggies)
+- [ ] Single-click pins (larger ring on all tiles + header row);
+      clicking the pin or Esc clears; double-click doesn't accidentally pin
+- [ ] Hovering an RGB tile shows the Tint bar below it (White | Color);
+      the bar is reachable without flickering away
+- [ ] Framed tile leaves visible slivers of neighbors; double-clicking a
+      sliver moves focus there; double-click outside the grid recenters
+- [ ] In focus mode the title widget stays centered showing the tile name,
+      with the mask button: isolate hides all other tiles
+- [ ] Holding Space in focus mode peeks the source image; release restores
+- [ ] Export button downloads the current view as a PNG
+- [ ] Adding images auto-opens the Media Library; PgUp/PgDn step between
+      library images
+- [ ] While zoomed into a tile: arrow keys SNAP between tiles — left and
+      right wrap through the reading order (tile 2 → 3, 8 → 0), up and
+      down clamp at the top/bottom rows; double-click still returns to
+      the full grid with its tween
 - [ ] In color mode, sweeping the cursor across all nine tiles produces
       zero flicker on the RGB tiles (the uniforms-reset bug is gone)
 - [ ] Hue retarget on the hue tile snaps instantly with cursor movement
