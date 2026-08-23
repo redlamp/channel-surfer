@@ -58,6 +58,11 @@ Run `bun run dev` → http://localhost:7847
       the selection (try a PNG and a JPEG; JPEG should also show
       Baseline/Progressive)
 - [ ] Refresh: library, selection, and settings all survive
-- [ ] While zoomed into a tile: arrow keys tween to the neighboring tile
-      (clamped at grid edges, page never scrolls); double-click still
-      returns to the full grid
+- [ ] While zoomed into a tile: arrow keys SNAP to the neighboring tile
+      (no tween; clamped at grid edges, page never scrolls); double-click
+      still returns to the full grid with its tween
+- [ ] In color mode, sweeping the cursor across all nine tiles produces
+      zero flicker on the RGB tiles (the uniforms-reset bug is gone)
+- [ ] Hue retarget on the hue tile snaps instantly with cursor movement
+- [ ] Library starts closed; highlight setting reads "Hue tile" even if
+      you previously had "All tiles" stored (one-time migration)

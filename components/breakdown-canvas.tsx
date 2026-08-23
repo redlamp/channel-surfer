@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Canvas,
   useFrame,
@@ -64,14 +64,6 @@ function tileFromUv(uv: THREE.Vector2) {
     u: uv.x * 3 - gx,
     v: uv.y * 3 - gyFromBottom,
   };
-}
-
-/** Shortest signed distance between two hues on the wheel, in [-0.5, 0.5]. */
-function hueDelta(from: number, to: number) {
-  let d = (to - from) % 1;
-  if (d > 0.5) d -= 1;
-  if (d < -0.5) d += 1;
-  return d;
 }
 
 function srgbToLinear(c8: number) {
@@ -249,16 +241,8 @@ function BreakdownScene({
           (OUTLINE_PX * worldPerPx) / (PLANE_H / 3),
         );
       }
-      const cur = mat.uniforms.uTargetHue.value as number;
-      const goal = hueGoalRef.current;
-      const d = hueDelta(cur, goal);
-      if (Math.abs(d) > 0.0005) {
-        const k = 1 - Math.exp(-10 * dt);
-        mat.uniforms.uTargetHue.value = (((cur + d * k) % 1) + 1) % 1;
-        active = true;
-      } else if (cur !== goal) {
-        mat.uniforms.uTargetHue.value = goal;
-      }
+      // Hue target snaps (no tween) — Taylor found the ease distracting.
+      mat.uniforms.uTargetHue.value = hueGoalRef.current;
 
       const mixCur = mat.uniforms.uRgbColorize.value as number;
       const mixGoal = rgbColorizeGoalRef.current;
@@ -340,15 +324,24 @@ function BreakdownScene({
   };
 
   const frameTile = useCallback(
-    (tile: number) => {
-      const { size } = get();
+    (tile: number, snap = false) => {
+      const { size, camera, controls } = get();
       zoomedTileRef.current = tile;
       const r = tileRect(tile, aspect);
-      viewGoalRef.current = {
-        x: r.cx,
-        y: r.cy,
-        zoom: Math.min(size.width / r.w, size.height / r.h),
-      };
+      const zoom = Math.min(size.width / r.w, size.height / r.h);
+      if (snap && camera instanceof THREE.OrthographicCamera) {
+        viewGoalRef.current = null;
+        camera.position.set(r.cx, r.cy, camera.position.z);
+        camera.zoom = zoom;
+        camera.updateProjectionMatrix();
+        (controls as { target?: THREE.Vector3 } | null)?.target?.set(
+          r.cx,
+          r.cy,
+          0,
+        );
+      } else {
+        viewGoalRef.current = { x: r.cx, y: r.cy, zoom };
+      }
       invalidate();
     },
     [aspect, get, invalidate],
@@ -401,13 +394,33 @@ function BreakdownScene({
       const col = Math.min(Math.max((cur % 3) + d[0], 0), 2);
       const row = Math.min(Math.max(Math.floor(cur / 3) + d[1], 0), 2);
       const next = row * 3 + col;
-      if (next !== cur) frameTile(next);
+      // Snap, per Taylor — no camera tween on keyboard navigation.
+      if (next !== cur) frameTile(next, true);
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [frameTile]);
 
-  if (!texture) return null;
+  // One stable uniforms object per texture. An inline object literal here
+  // is a NEW identity every render, so any re-render (e.g. hover state)
+  // made R3F re-apply the prop and reset every uniform to its initial
+  // value — uRgbColorize snapped to 0 and faded back up, which read as a
+  // flicker on the RGB tiles whenever the cursor crossed tiles.
+  const uniforms = useMemo(
+    () =>
+      texture
+        ? {
+            uSource: { value: texture },
+            uTargetHue: { value: DEFAULT_TARGET_HUE },
+            uRgbColorize: { value: 0 },
+            uHoverTile: { value: -1 },
+            uOutlineUv: { value: new THREE.Vector2() },
+          }
+        : null,
+    [texture],
+  );
+
+  if (!texture || !uniforms) return null;
 
   return (
     <>
@@ -426,13 +439,7 @@ function BreakdownScene({
           ref={materialRef}
           vertexShader={breakdownVertexShader}
           fragmentShader={breakdownFragmentShader}
-          uniforms={{
-            uSource: { value: texture },
-            uTargetHue: { value: DEFAULT_TARGET_HUE },
-            uRgbColorize: { value: 0 },
-            uHoverTile: { value: -1 },
-            uOutlineUv: { value: new THREE.Vector2() },
-          }}
+          uniforms={uniforms}
           depthTest={false}
           depthWrite={false}
         />
