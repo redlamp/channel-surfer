@@ -19,7 +19,13 @@ import { useSettingsStore } from "@/stores/settings-store";
 import { canvasBridge, useUiStore } from "@/stores/ui-store";
 import { cn } from "@/lib/utils";
 
-const HUE_STYLE_INDEX = { warmcool: 0, glow: 1, bands: 2 } as const;
+const HUE_STYLE_INDEX = {
+  warmcool: 0,
+  glow: 1,
+  twilight: 2,
+  diamond: 3,
+  crawl: 4,
+} as const;
 
 /** World-space height of the 3x3 grid plane; width is aspect x this. */
 const PLANE_H = 1;
@@ -98,16 +104,20 @@ function pixelHue(data: Uint8ClampedArray, i: number): number | null {
   return h < 0 ? h + 1 : h;
 }
 
+type CanvasCursor = "reticle" | "move" | "grabbing";
+
 function BreakdownScene({
   url,
   aspect,
   hoverTile,
   onHoverTile,
+  onCursor,
 }: {
   url: string;
   aspect: number;
   hoverTile: number | null;
   onHoverTile: (tile: number | null) => void;
+  onCursor: (cursor: CanvasCursor) => void;
 }) {
   const get = useThree((s) => s.get);
   const invalidate = useThree((s) => s.invalidate);
@@ -128,6 +138,8 @@ function BreakdownScene({
   const clickTimerRef = useRef<number | null>(null);
   const lastRgbTileRef = useRef<number | null>(null);
   const lastRgbHoverAtRef = useRef(0);
+  const pinDragRef = useRef(false);
+  const pinHoverRef = useRef(false);
 
   // Hand the DOM shell a way to request frames (tint bar handlers).
   useEffect(() => {
@@ -215,7 +227,11 @@ function BreakdownScene({
   useEffect(() => {
     if (!texture) return;
     const mat = materialRef.current;
-    if (mat) mat.uniforms.uRgbColorize.value = rgbColorizeGoalRef.current;
+    if (mat) {
+      mat.uniforms.uRgbColorize.value = rgbColorizeGoalRef.current;
+      mat.uniforms.uColorModel.value =
+        useSettingsStore.getState().colorModel === "hsl" ? 1 : 0;
+    }
     invalidate();
     return () => texture.dispose();
   }, [texture, invalidate]);
@@ -247,30 +263,58 @@ function BreakdownScene({
     invalidate();
   }, [aspect, url, get, invalidate]);
 
-  // A user grabbing the controls takes over from any in-flight camera tween.
+  // A user grabbing the controls takes over from any in-flight camera
+  // tween, and the cursor flips to a grabbing hand for the drag.
   useEffect(() => {
     if (!controls) return;
-    const cancel = () => {
-      viewGoalRef.current = null;
-    };
     const ctl = controls as unknown as THREE.EventDispatcher<{
       start: object;
+      end: object;
     }>;
-    ctl.addEventListener("start", cancel);
-    return () => ctl.removeEventListener("start", cancel);
-  }, [controls]);
+    const onStart = () => {
+      viewGoalRef.current = null;
+      if (!pinDragRef.current) onCursor("grabbing");
+    };
+    const onEnd = () =>
+      onCursor(pinHoverRef.current ? "move" : "reticle");
+    ctl.addEventListener("start", onStart);
+    ctl.addEventListener("end", onEnd);
+    return () => {
+      ctl.removeEventListener("start", onStart);
+      ctl.removeEventListener("end", onEnd);
+    };
+  }, [controls, onCursor]);
 
   // Per-frame uniform sync, tween engine, and tint-bar placement. Runs
   // only while frames are requested; keeps invalidating until settled.
-  useFrame((state, dt) => {
+  useFrame((state, rawDt) => {
     let active = false;
+    // Demand-mode frames can arrive after long idle gaps; an unclamped
+    // delta makes every ease complete in one frame (the "inconsistent
+    // tint tween"). Clamp to a 30fps step.
+    const dt = Math.min(rawDt, 1 / 30);
 
     const mat = materialRef.current;
     if (mat) {
       mat.uniforms.uHoverTile.value = hoverTileRef.current ?? -1;
       const settings = useSettingsStore.getState();
-      mat.uniforms.uColorModel.value = settings.colorModel === "hsl" ? 1 : 0;
       mat.uniforms.uHueMapStyle.value = HUE_STYLE_INDEX[settings.hueMapStyle];
+
+      // HSB <-> HSL cross-fade: ease uColorModel toward the setting.
+      const modelCur = mat.uniforms.uColorModel.value as number;
+      const modelGoal = settings.colorModel === "hsl" ? 1 : 0;
+      if (Math.abs(modelGoal - modelCur) > 0.002) {
+        const k = 1 - Math.exp(-10 * dt);
+        mat.uniforms.uColorModel.value = modelCur + (modelGoal - modelCur) * k;
+        active = true;
+      } else if (modelCur !== modelGoal) {
+        mat.uniforms.uColorModel.value = modelGoal;
+      }
+      if (settings.hueMapStyle === "crawl") {
+        // The crawl style animates: keep frames coming while selected.
+        mat.uniforms.uTime.value += dt;
+        active = true;
+      }
       // Hue target snaps (no tween) — Taylor found the ease distracting.
       mat.uniforms.uTargetHue.value = hueGoalRef.current;
 
@@ -364,9 +408,45 @@ function BreakdownScene({
     if (active) invalidate();
   });
 
+  /** Screen-pixel distance from an intra-tile UV to the current pin. */
+  const pinDistPx = (u: number, v: number) => {
+    const pin = pinUvRef.current;
+    const { camera } = get();
+    if (!pin || !(camera instanceof THREE.OrthographicCamera))
+      return Infinity;
+    const pxPerU = camera.zoom * ((aspect * PLANE_H) / 3);
+    const pxPerV = camera.zoom * (PLANE_H / 3);
+    return Math.hypot((u - pin.u) * pxPerU, (v - pin.v) * pxPerV);
+  };
+
+  const setPinAt = (u: number, v: number) => {
+    const id = imageDataRef.current;
+    if (!id) return;
+    const px = Math.min(Math.floor(u * id.width), id.width - 1);
+    const py = Math.min(Math.floor((1 - v) * id.height), id.height - 1);
+    const i = (py * id.width + px) * 4;
+    pinUvRef.current = { u, v };
+    useUiStore.getState().setPinnedColor({
+      r: id.data[i],
+      g: id.data[i + 1],
+      b: id.data[i + 2],
+      x: px,
+      y: py,
+      u,
+      v,
+    });
+  };
+
   const onPointerMove = (e: ThreeEvent<PointerEvent>) => {
     if (!e.uv) return;
     const { tile, u, v } = tileFromUv(e.uv);
+    if (pinDragRef.current) {
+      setPinAt(u, v);
+      invalidate();
+      return;
+    }
+    pinHoverRef.current = pinDistPx(u, v) < 12;
+    onCursor(pinHoverRef.current ? "move" : "reticle");
     onHoverTile(tile);
     hoverUvRef.current = { u, v };
     const mode = useSettingsStore.getState().highlightMode;
@@ -399,11 +479,35 @@ function BreakdownScene({
   const onPointerOut = () => {
     onHoverTile(null);
     hoverUvRef.current = null;
+    if (!pinDragRef.current) {
+      pinHoverRef.current = false;
+      onCursor("reticle");
+    }
     useUiStore.getState().setHoverColor(null);
     hueGoalRef.current = DEFAULT_TARGET_HUE;
     invalidate();
     // One more frame after the grace window so the tint bar can hide.
     window.setTimeout(() => invalidate(), TINT_BAR_GRACE_MS + 50);
+  };
+
+  // Grabbing the pinned circle drags the pin instead of the canvas.
+  const onPointerDown = (e: ThreeEvent<PointerEvent>) => {
+    if (!e.uv) return;
+    const { u, v } = tileFromUv(e.uv);
+    if (pinDistPx(u, v) >= 12) return;
+    pinDragRef.current = true;
+    const ctl = get().controls as { enabled?: boolean } | null;
+    if (ctl) ctl.enabled = false;
+    (e.target as Element | null)?.setPointerCapture?.(e.pointerId);
+    onCursor("move");
+  };
+
+  const onPointerUp = () => {
+    if (!pinDragRef.current) return;
+    pinDragRef.current = false;
+    const ctl = get().controls as { enabled?: boolean } | null;
+    if (ctl) ctl.enabled = true;
+    invalidate();
   };
 
   // Single click pins (or unpins) the color sample. Held briefly so a
@@ -416,39 +520,15 @@ function BreakdownScene({
       window.clearTimeout(clickTimerRef.current);
     clickTimerRef.current = window.setTimeout(() => {
       clickTimerRef.current = null;
-      const ui = useUiStore.getState();
-      const pin = pinUvRef.current;
-      const { camera } = get();
-      if (pin && camera instanceof THREE.OrthographicCamera) {
+      if (pinDistPx(u, v) < 12) {
         // Clicking on (or near) the existing pin clears it.
-        const pxPerU = camera.zoom * ((aspect * PLANE_H) / 3);
-        const pxPerV = camera.zoom * (PLANE_H / 3);
-        const dist = Math.hypot(
-          (u - pin.u) * pxPerU,
-          (v - pin.v) * pxPerV,
-        );
-        if (dist < 12) {
-          pinUvRef.current = null;
-          ui.setPinnedColor(null);
-          invalidate();
-          return;
-        }
+        pinUvRef.current = null;
+        pinHoverRef.current = false;
+        onCursor("reticle");
+        useUiStore.getState().setPinnedColor(null);
+      } else {
+        setPinAt(u, v);
       }
-      const id = imageDataRef.current;
-      if (!id) return;
-      const px = Math.min(Math.floor(u * id.width), id.width - 1);
-      const py = Math.min(Math.floor((1 - v) * id.height), id.height - 1);
-      const i = (py * id.width + px) * 4;
-      pinUvRef.current = { u, v };
-      ui.setPinnedColor({
-        r: id.data[i],
-        g: id.data[i + 1],
-        b: id.data[i + 2],
-        x: px,
-        y: py,
-        u,
-        v,
-      });
       invalidate();
     }, CLICK_DELAY_MS);
   };
@@ -602,6 +682,7 @@ function BreakdownScene({
             uPeekTile: { value: -1 },
             uColorModel: { value: 0 },
             uHueMapStyle: { value: 0 },
+            uTime: { value: 0 },
           }
         : null,
     [texture],
@@ -615,6 +696,8 @@ function BreakdownScene({
       frustumCulled={false}
       onPointerMove={onPointerMove}
       onPointerOut={onPointerOut}
+      onPointerDown={onPointerDown}
+      onPointerUp={onPointerUp}
       onClick={onClick}
       onDoubleClick={onDoubleClick}
     >
@@ -669,6 +752,7 @@ export function BreakdownCanvas() {
   const setIsolate = useUiStore((s) => s.setIsolate);
   const setCanvasEl = useUiStore((s) => s.setCanvasEl);
   const [hoverTile, setHoverTile] = useState<number | null>(null);
+  const [cursor, setCursor] = useState<CanvasCursor>("reticle");
 
   if (!url) {
     return (
@@ -683,7 +767,14 @@ export function BreakdownCanvas() {
   return (
     <div
       className="relative h-full w-full overflow-hidden rounded-md border border-border"
-      style={{ cursor: RETICLE_CURSOR }}
+      style={{
+        cursor:
+          cursor === "grabbing"
+            ? "grabbing"
+            : cursor === "move"
+              ? "move"
+              : RETICLE_CURSOR,
+      }}
       onDoubleClick={() => {
         // A double-click the mesh already handled arrives here ~instantly
         // after; anything else was outside the tiles — recenter the view.
@@ -704,6 +795,7 @@ export function BreakdownCanvas() {
           aspect={width / height}
           hoverTile={hoverTile}
           onHoverTile={setHoverTile}
+          onCursor={setCursor}
         />
         <MapControls
           makeDefault

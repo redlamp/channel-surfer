@@ -8,8 +8,8 @@ import { persist } from "zustand/middleware";
 export type HighlightMode = "off" | "tile" | "all";
 /** Color model for the saturation/brightness tiles and readouts. */
 export type ColorModel = "hsb" | "hsl";
-/** Hue-map rendering style. */
-export type HueMapStyle = "warmcool" | "glow" | "bands";
+/** Hue-map rendering style (see wiki/research/hue-direction-encoding.md). */
+export type HueMapStyle = "warmcool" | "glow" | "twilight" | "diamond" | "crawl";
 
 interface SettingsState {
   highlightMode: HighlightMode;
@@ -47,13 +47,18 @@ export const useSettingsStore = create<SettingsState>()(
     }),
     {
       name: "channel-surfer:settings",
-      // v1: default highlightMode changed "all" -> "tile"; migrate stored
-      // v0 state so existing browsers pick up the new default once.
-      // (New fields since are additive — zustand merges defaults in.)
-      version: 1,
+      // v1: default highlightMode changed "all" -> "tile". v2: the static
+      // "bands" hue-map style became the animated "crawl".
+      // (New fields are additive — zustand merges defaults in.)
+      version: 2,
       migrate: (persisted, version) => {
-        const state = persisted as Partial<SettingsState>;
+        const state = persisted as Omit<
+          Partial<SettingsState>,
+          "hueMapStyle"
+        > & { hueMapStyle?: string };
         if (version === 0) state.highlightMode = "tile";
+        if (version <= 1 && state.hueMapStyle === "bands")
+          state.hueMapStyle = "crawl";
         return state as SettingsState;
       },
     },
