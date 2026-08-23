@@ -201,8 +201,8 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
             onChange={(v) => setShowColorHexagon(v === "show")}
           />
           <p className="text-base text-muted-foreground">
-            The color-taylor hue/saturation hexagon with hover and pin
-            markers, below the canvas.
+            The color-taylor hexagon as a hover card that follows the
+            cursor, with RGB channel stems for the hovered color.
           </p>
         </div>
 

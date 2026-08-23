@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from "react";
 import { Download, LibraryBig, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BreakdownCanvas } from "@/components/breakdown-canvas";
-import { ColorHexagon } from "@/components/color-hexagon";
 import { ColorReadout } from "@/components/color-readout";
 import { ColorSteps } from "@/components/color-steps";
 import { LibraryPanel } from "@/components/library-panel";
@@ -140,10 +139,7 @@ export function SurferApp() {
           <div className="min-h-0 flex-1">
             <BreakdownCanvas />
           </div>
-          <div className="flex items-start gap-3 empty:hidden">
-            <ColorHexagon />
-            <ColorSteps />
-          </div>
+          <ColorSteps />
         </div>
         {libraryOpen && <LibraryPanel />}
         {settingsOpen && (

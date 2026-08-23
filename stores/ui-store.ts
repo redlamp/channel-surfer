@@ -45,6 +45,8 @@ export const canvasBridge = {
   meshDblAt: 0,
   invalidate: null as (() => void) | null,
   refit: null as (() => void) | null,
+  /** The hexagon hover card, positioned per-frame by the scene. */
+  hexCardEl: null as HTMLDivElement | null,
 };
 
 export const useUiStore = create<UiState>((set) => ({
