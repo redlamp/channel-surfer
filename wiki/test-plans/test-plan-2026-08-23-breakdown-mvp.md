@@ -58,3 +58,6 @@ Run `bun run dev` → http://localhost:7847
       the selection (try a PNG and a JPEG; JPEG should also show
       Baseline/Progressive)
 - [ ] Refresh: library, selection, and settings all survive
+- [ ] While zoomed into a tile: arrow keys tween to the neighboring tile
+      (clamped at grid edges, page never scrolls); double-click still
+      returns to the full grid
