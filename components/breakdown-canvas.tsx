@@ -15,6 +15,9 @@ import {
 } from "@/lib/shaders/breakdown";
 import { useSourceStore } from "@/stores/source-store";
 import { useSettingsStore } from "@/stores/settings-store";
+import { useUiStore } from "@/stores/ui-store";
+
+const HUE_STYLE_INDEX = { warmcool: 0, glow: 1, bands: 2 } as const;
 
 /** World-space height of the 3x3 grid plane; width is aspect x this. */
 const PLANE_H = 1;
@@ -125,6 +128,14 @@ function BreakdownScene({
     invalidate();
   }, [rgbColorize, invalidate]);
 
+  // Model/style uniforms sync in useFrame; these subscriptions just make
+  // sure a settings change requests the frame that applies it.
+  const colorModel = useSettingsStore((s) => s.colorModel);
+  const hueMapStyle = useSettingsStore((s) => s.hueMapStyle);
+  useEffect(() => {
+    invalidate();
+  }, [colorModel, hueMapStyle, invalidate]);
+
   useEffect(() => {
     hoverTileRef.current = hoverTile;
     invalidate();
@@ -234,6 +245,9 @@ function BreakdownScene({
       // Hover outline: tile index plus a constant-screen-width edge, both
       // refreshed every rendered frame (zoom changes arrive here too).
       mat.uniforms.uHoverTile.value = hoverTileRef.current ?? -1;
+      const settings = useSettingsStore.getState();
+      mat.uniforms.uColorModel.value = settings.colorModel === "hsl" ? 1 : 0;
+      mat.uniforms.uHueMapStyle.value = HUE_STYLE_INDEX[settings.hueMapStyle];
       if (state.camera instanceof THREE.OrthographicCamera) {
         const worldPerPx = 1 / state.camera.zoom;
         mat.uniforms.uOutlineUv.value.set(
@@ -289,21 +303,33 @@ function BreakdownScene({
     const mode = useSettingsStore.getState().highlightMode;
     const picking =
       mode === "all" || (mode === "tile" && tile === HUE_MAP_TILE);
-    if (picking && imageDataRef.current) {
-      const id = imageDataRef.current;
+    const id = imageDataRef.current;
+    if (id) {
       const px = Math.min(Math.floor(u * id.width), id.width - 1);
       const py = Math.min(Math.floor((1 - v) * id.height), id.height - 1);
-      const h = pixelHue(id.data, (py * id.width + px) * 4);
-      // Greys have no hue — hold the current target rather than jumping.
-      if (h !== null) hueGoalRef.current = h;
-    } else {
-      hueGoalRef.current = DEFAULT_TARGET_HUE;
+      const i = (py * id.width + px) * 4;
+      useUiStore.getState().setHoverColor({
+        r: id.data[i],
+        g: id.data[i + 1],
+        b: id.data[i + 2],
+        x: px,
+        y: py,
+        u,
+        v,
+      });
+      if (picking) {
+        // Greys have no hue — hold the current target rather than jumping.
+        const h = pixelHue(id.data, i);
+        if (h !== null) hueGoalRef.current = h;
+      }
     }
+    if (!picking) hueGoalRef.current = DEFAULT_TARGET_HUE;
     invalidate();
   };
 
   const onPointerOut = () => {
     onHoverTile(null);
+    useUiStore.getState().setHoverColor(null);
     hueGoalRef.current = DEFAULT_TARGET_HUE;
     invalidate();
   };
@@ -415,6 +441,8 @@ function BreakdownScene({
             uRgbColorize: { value: 0 },
             uHoverTile: { value: -1 },
             uOutlineUv: { value: new THREE.Vector2() },
+            uColorModel: { value: 0 },
+            uHueMapStyle: { value: 0 },
           }
         : null,
     [texture],

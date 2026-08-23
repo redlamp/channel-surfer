@@ -6,7 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
   useSettingsStore,
+  type ColorModel,
   type HighlightMode,
+  type HueMapStyle,
 } from "@/stores/settings-store";
 import { cn } from "@/lib/utils";
 
@@ -47,6 +49,17 @@ const HIGHLIGHT_OPTIONS: { value: HighlightMode; label: string }[] = [
   { value: "all", label: "All tiles" },
 ];
 
+const COLOR_MODEL_OPTIONS: { value: ColorModel; label: string }[] = [
+  { value: "hsb", label: "HSB" },
+  { value: "hsl", label: "HSL" },
+];
+
+const HUE_STYLE_OPTIONS: { value: HueMapStyle; label: string }[] = [
+  { value: "warmcool", label: "Warm/cool" },
+  { value: "glow", label: "Glow" },
+  { value: "bands", label: "Bands" },
+];
+
 /**
  * Settings as a right-edge sheet (the color-taylor pattern): base-ui
  * Dialog supplies portal, backdrop, focus trap, Escape and click-outside.
@@ -64,6 +77,12 @@ export function SettingsPanel({
   const setHighlightMode = useSettingsStore((s) => s.setHighlightMode);
   const rgbColorize = useSettingsStore((s) => s.rgbColorize);
   const setRgbColorize = useSettingsStore((s) => s.setRgbColorize);
+  const colorModel = useSettingsStore((s) => s.colorModel);
+  const setColorModel = useSettingsStore((s) => s.setColorModel);
+  const hueMapStyle = useSettingsStore((s) => s.hueMapStyle);
+  const setHueMapStyle = useSettingsStore((s) => s.setHueMapStyle);
+  const showColorSteps = useSettingsStore((s) => s.showColorSteps);
+  const setShowColorSteps = useSettingsStore((s) => s.setShowColorSteps);
 
   return (
     <DialogPrimitive.Root
@@ -109,7 +128,7 @@ export function SettingsPanel({
             </div>
 
             <div className="space-y-2">
-              <Label>RGB channel tiles</Label>
+              <Label>Tint (RGB channel tiles)</Label>
               <Segmented
                 value={rgbColorize ? "color" : "gray"}
                 options={[
@@ -119,7 +138,49 @@ export function SettingsPanel({
                 onChange={(v) => setRgbColorize(v === "color")}
               />
               <p className="text-base text-muted-foreground">
-                Single-clicking an RGB tile also toggles this.
+                The Tint bar under a hovered RGB tile toggles this too.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Color model</Label>
+              <Segmented
+                value={colorModel}
+                options={COLOR_MODEL_OPTIONS}
+                onChange={setColorModel}
+              />
+              <p className="text-base text-muted-foreground">
+                Switches the saturation and brightness/lightness tiles and
+                the readouts.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Hue map style</Label>
+              <Segmented
+                value={hueMapStyle}
+                options={HUE_STYLE_OPTIONS}
+                onChange={setHueMapStyle}
+              />
+              <p className="text-base text-muted-foreground">
+                Warm/cool accents by direction, glow by closeness in the
+                pixel&apos;s own hue, or posterized distance bands.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Color steps</Label>
+              <Segmented
+                value={showColorSteps ? "show" : "hide"}
+                options={[
+                  { value: "hide", label: "Hide" },
+                  { value: "show", label: "Show" },
+                ]}
+                onChange={(v) => setShowColorSteps(v === "show")}
+              />
+              <p className="text-base text-muted-foreground">
+                The color-taylor hex and HSB/HSL derivation for the hovered
+                pixel, below the canvas.
               </p>
             </div>
           </div>
@@ -129,8 +190,11 @@ export function SettingsPanel({
               variant="secondary"
               className="w-full"
               onClick={() => {
-                setHighlightMode("all");
+                setHighlightMode("tile");
                 setRgbColorize(false);
+                setColorModel("hsb");
+                setHueMapStyle("warmcool");
+                setShowColorSteps(false);
               }}
             >
               Reset to defaults
