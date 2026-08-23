@@ -243,6 +243,8 @@ void main() {
   vec3 color = texture2D(uSource, tileUv).rgb;
 
   bool peek = uPeekTile > -0.5 && tileIndex == int(uPeekTile + 0.5);
+  bool tintTile = !peek && tileIndex >= 6;
+  vec3 tint = vec3(0.0);
   if      (peek)           color = imageSource(color);
   else if (tileIndex == 0) color = imageSource(color);
   else if (tileIndex == 1) color = imageMaxSat(color);
@@ -250,11 +252,15 @@ void main() {
   else if (tileIndex == 3) color = imageHue(color);
   else if (tileIndex == 4) color = imageSat(color);
   else if (tileIndex == 5) color = imageVal(color);
-  else if (tileIndex == 6) color = mix(vec3(color.r), vec3(color.r, 0.0, 0.0), uRgbColorize);
-  else if (tileIndex == 7) color = mix(vec3(color.g), vec3(0.0, color.g, 0.0), uRgbColorize);
-  else                     color = mix(vec3(color.b), vec3(0.0, 0.0, color.b), uRgbColorize);
+  else if (tileIndex == 6) { tint = vec3(color.r, 0.0, 0.0); color = vec3(color.r); }
+  else if (tileIndex == 7) { tint = vec3(0.0, color.g, 0.0); color = vec3(color.g); }
+  else                     { tint = vec3(0.0, 0.0, color.b); color = vec3(color.b); }
 
   color = linearToSRGB(color);
+
+  // Tint cross-fades in sRGB space. A linear-light mix front-loads the
+  // perceptible change when fading back to white, which read as a snap.
+  if (tintTile) color = mix(color, linearToSRGB(tint), uRgbColorize);
 
   // Hover outline: constant 2px edge on the hovered tile.
   if (uHoverTile > -0.5 && tileIndex == int(uHoverTile + 0.5)) {

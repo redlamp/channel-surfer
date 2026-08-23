@@ -338,14 +338,17 @@ function BreakdownScene({
           ? zoomedTileRef.current
           : -1;
 
+      // Constant-rate fade (full sweep in ~350ms) so both directions read
+      // at the same speed, unlike an exponential tail.
       const mixCur = mat.uniforms.uRgbColorize.value as number;
       const mixGoal = rgbColorizeGoalRef.current;
-      if (Math.abs(mixGoal - mixCur) > 0.002) {
-        const k = 1 - Math.exp(-12 * dt);
-        mat.uniforms.uRgbColorize.value = mixCur + (mixGoal - mixCur) * k;
+      if (mixCur !== mixGoal) {
+        const step = dt / 0.35;
+        mat.uniforms.uRgbColorize.value =
+          mixCur < mixGoal
+            ? Math.min(mixGoal, mixCur + step)
+            : Math.max(mixGoal, mixCur - step);
         active = true;
-      } else if (mixCur !== mixGoal) {
-        mat.uniforms.uRgbColorize.value = mixGoal;
       }
     }
 
