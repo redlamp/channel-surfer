@@ -15,14 +15,14 @@ dissolve-shader demo.
 
 ## Decision
 
-- **Fresh repo** `redlamp/channel-surf`, local `C:\workspace\channel-surf`.
+- **Fresh repo** `redlamp/channel-surfer`, local `C:\workspace\channel-surfer`.
   ImageViewerGigi stays as the archived reference. Fresh repo avoids the
   Windows folder-name collision with the old `Image-Breakdown` Godot dir.
-- **Name:** repo slug `channel-surf`, display title **Channel Surfer**.
+- **Name:** repo slug `channel-surfer`, display title **Channel Surfer**.
 - **Stack:** Next.js 16 (App Router) + React Three Fiber + shadcn (base-ui)
   + Tailwind v4 + zustand + Bun — the wright-angles/starry-night pattern.
 - **Deploy:** GitHub Pages static export from `main`, gated behind
-  `NEXT_OUTPUT_EXPORT=1`; dev slot at `/channel-surf/dev` (wright-angles
+  `NEXT_OUTPUT_EXPORT=1`; dev slot at `/channel-surfer/dev` (wright-angles
   workflow pattern).
 - **Branching:** 3-tier `main` ← `dev` ← `feature/*`, `--no-ff`, manual
   dev→main promotion.

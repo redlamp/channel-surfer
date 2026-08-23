@@ -32,7 +32,7 @@ bun run lint
 ## Deploy
 
 Pushes to `main` build a static export and publish to GitHub Pages at
-`/channel-surf` (with `dev` built best-effort at `/channel-surf/dev`).
+`/channel-surfer` (with `dev` built best-effort at `/channel-surfer/dev`).
 Branch flow: `main` ← `dev` ← `feature/*`; `dev` → `main` promotion is manual.
 
 ## Project wiki

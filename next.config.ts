@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 // GH Pages static export is opt-in so local dev serves at root.
-// The deploy workflow sets NEXT_OUTPUT_EXPORT=1 and NEXT_PUBLIC_BASE_PATH=/channel-surf.
+// The deploy workflow sets NEXT_OUTPUT_EXPORT=1 and NEXT_PUBLIC_BASE_PATH=/channel-surfer.
 const isExport = process.env.NEXT_OUTPUT_EXPORT === "1";
 const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 
