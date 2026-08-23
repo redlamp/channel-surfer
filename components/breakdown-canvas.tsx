@@ -104,7 +104,7 @@ function pixelHue(data: Uint8ClampedArray, i: number): number | null {
   return h < 0 ? h + 1 : h;
 }
 
-type CanvasCursor = "reticle" | "move" | "grabbing";
+type CanvasCursor = "reticle" | "move" | "grabbing" | "hidden";
 
 function BreakdownScene({
   url,
@@ -499,7 +499,8 @@ function BreakdownScene({
     const ctl = get().controls as { enabled?: boolean } | null;
     if (ctl) ctl.enabled = false;
     (e.target as Element | null)?.setPointerCapture?.(e.pointerId);
-    onCursor("move");
+    // Hide the cursor during the drag so the ring's contents stay visible.
+    onCursor("hidden");
   };
 
   const onPointerUp = () => {
@@ -507,6 +508,7 @@ function BreakdownScene({
     pinDragRef.current = false;
     const ctl = get().controls as { enabled?: boolean } | null;
     if (ctl) ctl.enabled = true;
+    onCursor(pinHoverRef.current ? "move" : "reticle");
     invalidate();
   };
 
@@ -769,11 +771,13 @@ export function BreakdownCanvas() {
       className="relative h-full w-full overflow-hidden rounded-md border border-border"
       style={{
         cursor:
-          cursor === "grabbing"
-            ? "grabbing"
-            : cursor === "move"
-              ? "move"
-              : RETICLE_CURSOR,
+          cursor === "hidden"
+            ? "none"
+            : cursor === "grabbing"
+              ? "grabbing"
+              : cursor === "move"
+                ? "move"
+                : RETICLE_CURSOR,
       }}
       onDoubleClick={() => {
         // A double-click the mesh already handled arrives here ~instantly

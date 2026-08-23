@@ -126,7 +126,8 @@ export function SurferApp() {
             variant="ghost"
             size="icon"
             aria-label="Settings"
-            onClick={() => setSettingsOpen(true)}
+            aria-pressed={settingsOpen}
+            onClick={() => setSettingsOpen((v) => !v)}
           >
             <Settings2 aria-hidden />
           </Button>
