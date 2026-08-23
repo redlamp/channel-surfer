@@ -471,7 +471,7 @@ export function BreakdownCanvas() {
         />
       </Canvas>
       <div
-        className={`pointer-events-none absolute left-1/2 top-3 -translate-x-1/2 rounded-md border border-border bg-background/85 px-3 py-1 font-mono text-base transition-opacity duration-150 ${
+        className={`pointer-events-none absolute left-1/2 top-3 -translate-x-1/2 rounded-md border border-border bg-popover/90 px-3 py-1 font-mono text-base shadow-[var(--shadow-md)] transition-opacity duration-150 ${
           hoverTile === null ? "opacity-0" : "opacity-100"
         }`}
         aria-live="polite"
