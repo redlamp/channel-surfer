@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Trash2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ImageUp, Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import {
   DEMO_ID,
@@ -164,7 +165,9 @@ export function LibraryPanel() {
   const select = useSourceStore((s) => s.select);
   const remove = useSourceStore((s) => s.remove);
   const resetToDemo = useSourceStore((s) => s.resetToDemo);
+  const loadFiles = useSourceStore((s) => s.loadFiles);
   const demoUrl = useSourceStore((s) => (s.isDemo ? s.url : null));
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   return (
     <aside className="flex w-72 shrink-0 flex-col overflow-hidden rounded-md border border-border bg-card shadow-[var(--shadow-sm)]">
@@ -173,6 +176,29 @@ export function LibraryPanel() {
         <span className="font-mono text-base text-muted-foreground">
           {items.length} {items.length === 1 ? "image" : "images"}
         </span>
+      </div>
+
+      <div className="border-b border-border p-1.5">
+        <Button
+          variant="secondary"
+          className="w-full"
+          onClick={() => fileInputRef.current?.click()}
+        >
+          <ImageUp aria-hidden />
+          Open images
+        </Button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={(e) => {
+            if (e.target.files?.length)
+              void loadFiles(Array.from(e.target.files));
+            e.target.value = "";
+          }}
+        />
       </div>
 
       <div className="min-h-0 flex-1 space-y-0.5 overflow-y-auto p-1.5">

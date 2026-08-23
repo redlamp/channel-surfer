@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Download, ImageUp, LibraryBig, Settings2 } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { Download, LibraryBig, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BreakdownCanvas } from "@/components/breakdown-canvas";
 import { ColorReadout } from "@/components/color-readout";
@@ -18,7 +18,6 @@ export function SurferApp() {
   const error = useSourceStore((s) => s.error);
   const hydrate = useSourceStore((s) => s.hydrate);
   const loadFiles = useSourceStore((s) => s.loadFiles);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [libraryOpen, setLibraryOpen] = useState(false);
@@ -95,14 +94,8 @@ export function SurferApp() {
           <ColorReadout />
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <Button onClick={() => fileInputRef.current?.click()}>
-            <ImageUp aria-hidden />
-            Open images
-          </Button>
           <Button
             variant="ghost"
-            size="icon"
-            aria-label="Export breakdown as PNG"
             title="Export breakdown as PNG"
             onClick={() => {
               const canvas = useUiStore.getState().canvasEl;
@@ -119,16 +112,15 @@ export function SurferApp() {
             }}
           >
             <Download aria-hidden />
+            Export
           </Button>
           <Button
             variant="ghost"
-            size="icon"
-            aria-label="Media Library"
-            title="Media Library"
             aria-pressed={libraryOpen}
             onClick={() => setLibraryOpen((v) => !v)}
           >
             <LibraryBig aria-hidden />
+            Media Library
           </Button>
           <Button
             variant="ghost"
@@ -138,17 +130,6 @@ export function SurferApp() {
           >
             <Settings2 aria-hidden />
           </Button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            multiple
-            className="hidden"
-            onChange={(e) => {
-              handleFiles(e.target.files);
-              e.target.value = "";
-            }}
-          />
         </div>
       </header>
 
