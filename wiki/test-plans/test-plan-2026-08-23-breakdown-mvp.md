@@ -39,3 +39,22 @@ Run `bun run dev` → http://localhost:7847
 - [ ] Double-clicking an R/G/B tile frames it WITHOUT toggling the
       colorize mode (single-click waits out the double-click window)
 - [ ] A drag that ends on an R/G/B tile does not toggle the mode
+
+## Restyle + settings + library (evening 2026-08-23)
+
+- [ ] App is in Barlow / Share Tech Mono, anodised dark theme (page a
+      step darker than panels, hairline borders); no white flash when
+      hovering across RGB tiles in color mode
+- [ ] All UI text reads at 16px (no small text anywhere)
+- [ ] Settings (gear) opens a right-edge sheet; "Hue highlight on hover"
+      Off / Hue tile / All tiles works live and persists across refresh
+- [ ] With "All tiles": hovering ANY tile recalibrates the hue map and
+      shows the reticle cursor; "Hue tile" restricts it; "Off" disables
+- [ ] Library button toggles the right panel; dropping several files at
+      once adds them all and selects the last
+- [ ] Library rows: thumbnail, name, resolution; click switches the grid;
+      trash removes (falls back to the newest remaining, then demo)
+- [ ] Details block shows format / color mode / bit depth / file size for
+      the selection (try a PNG and a JPEG; JPEG should also show
+      Baseline/Progressive)
+- [ ] Refresh: library, selection, and settings all survive
