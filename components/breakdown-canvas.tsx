@@ -451,21 +451,25 @@ function BreakdownScene({
         const fitsLeft = x0 - gap - cw >= 8;
         const fitsBelow = y1 + gap + chh + 8 <= sh;
         const fitsAbove = y0 - gap - chh >= 8;
+        // Locked per tile: the target only changes when the hovered tile
+        // (or the camera) does, so the card sits still within a tile and
+        // tweens between spots as focus moves.
         if (fitsRight || fitsLeft) {
           gx =
             fitsRight && (!fitsLeft || sw - x1 >= x0)
               ? x1 + gap
               : x0 - gap - cw;
-          gy = clampY(p.y - chh / 2);
+          gy = clampY((y0 + y1) / 2 - chh / 2);
         } else if (fitsBelow || fitsAbove) {
           gy =
             fitsBelow && (!fitsAbove || sh - y1 >= y0)
               ? y1 + gap
               : y0 - gap - chh;
-          gx = clampX(p.x - cw / 2);
+          gx = clampX((x0 + x1) / 2 - cw / 2);
         } else {
-          gx = clampX(p.x > sw / 2 ? p.x - cw - 28 : p.x + 28);
-          gy = clampY(p.y > sh / 2 ? p.y - chh - 28 : p.y + 28);
+          // Framed tile fills the view: park in the top-right corner.
+          gx = sw - cw - 8;
+          gy = 8;
         }
         let cur = hexCardPosRef.current;
         if (!cur) {
