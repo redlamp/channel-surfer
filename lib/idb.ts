@@ -1,19 +1,24 @@
 /**
  * Minimal IndexedDB helper (wright-angles pattern). One DB, one object
- * store, and for now a single record: the current source image. Images
- * never leave the browser — this is the whole persistence layer.
+ * store holding the media library: item records keyed by their id, plus a
+ * pointer record for the current selection. Images never leave the
+ * browser — this is the whole persistence layer.
  */
 
 const DB_NAME = "channel-surfer";
 const STORE = "media";
 const VERSION = 1;
-const CURRENT_KEY = "current";
+/** Pre-library versions stored a single record under this key. */
+const LEGACY_KEY = "current";
+const CURRENT_PTR_KEY = "library:currentId";
 
-export interface SourceRecord {
+export interface MediaRecord {
+  id: string;
   blob: Blob;
   name: string;
   width: number;
   height: number;
+  addedAt: number;
 }
 
 function openDb(): Promise<IDBDatabase> {
@@ -45,11 +50,41 @@ function tx<T>(
   );
 }
 
-export const idbPutCurrent = (record: SourceRecord) =>
-  tx("readwrite", (s) => s.put(record, CURRENT_KEY));
+export const idbPutItem = (record: MediaRecord) =>
+  tx("readwrite", (s) => s.put(record, record.id));
 
-export const idbGetCurrent = () =>
-  tx<SourceRecord | undefined>("readonly", (s) => s.get(CURRENT_KEY));
+export const idbDeleteItem = (id: string) =>
+  tx("readwrite", (s) => s.delete(id));
 
-export const idbClearCurrent = () =>
-  tx("readwrite", (s) => s.delete(CURRENT_KEY));
+/** All library items, oldest first. Skips pointer and legacy records. */
+export const idbGetAllItems = () =>
+  tx<unknown[]>("readonly", (s) => s.getAll()).then(
+    (records) =>
+      records
+        .filter(
+          (r): r is MediaRecord =>
+            typeof r === "object" &&
+            r !== null &&
+            "id" in r &&
+            "blob" in r,
+        )
+        .sort((a, b) => a.addedAt - b.addedAt),
+  );
+
+export const idbSetCurrentId = (id: string | null) =>
+  tx("readwrite", (s) => s.put({ currentId: id }, CURRENT_PTR_KEY));
+
+export const idbGetCurrentId = () =>
+  tx<{ currentId?: string | null } | undefined>("readonly", (s) =>
+    s.get(CURRENT_PTR_KEY),
+  ).then((r) => r?.currentId ?? null);
+
+/** One-time migration of the single-image record from before the library. */
+export const idbTakeLegacyCurrent = async () => {
+  const legacy = await tx<
+    { blob: Blob; name: string; width: number; height: number } | undefined
+  >("readonly", (s) => s.get(LEGACY_KEY));
+  if (!legacy || !("blob" in legacy)) return null;
+  await tx("readwrite", (s) => s.delete(LEGACY_KEY));
+  return legacy;
+};

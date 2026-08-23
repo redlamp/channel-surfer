@@ -1,18 +1,24 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ImageUp, Settings2, Undo2 } from "lucide-react";
+import { ImageUp, LibraryBig, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BreakdownCanvas } from "@/components/breakdown-canvas";
+import { LibraryPanel } from "@/components/library-panel";
 import { SettingsPanel } from "@/components/settings-panel";
 import { useSourceStore } from "@/stores/source-store";
 
 export function SurferApp() {
-  const { name, width, height, isDemo, error, hydrate, loadFile, resetToDemo } =
-    useSourceStore();
+  const name = useSourceStore((s) => s.name);
+  const width = useSourceStore((s) => s.width);
+  const height = useSourceStore((s) => s.height);
+  const error = useSourceStore((s) => s.error);
+  const hydrate = useSourceStore((s) => s.hydrate);
+  const loadFiles = useSourceStore((s) => s.loadFiles);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [libraryOpen, setLibraryOpen] = useState(true);
 
   useEffect(() => {
     void hydrate();
@@ -20,10 +26,10 @@ export function SurferApp() {
 
   const handleFiles = useCallback(
     (files: FileList | null) => {
-      const file = files?.[0];
-      if (file) void loadFile(file);
+      if (!files || files.length === 0) return;
+      void loadFiles(Array.from(files));
     },
-    [loadFile],
+    [loadFiles],
   );
 
   return (
@@ -52,15 +58,18 @@ export function SurferApp() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {!isDemo && (
-            <Button variant="ghost" onClick={() => void resetToDemo()}>
-              <Undo2 aria-hidden />
-              Demo image
-            </Button>
-          )}
           <Button onClick={() => fileInputRef.current?.click()}>
             <ImageUp aria-hidden />
-            Open image
+            Open images
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Toggle library"
+            aria-pressed={libraryOpen}
+            onClick={() => setLibraryOpen((v) => !v)}
+          >
+            <LibraryBig aria-hidden />
           </Button>
           <Button
             variant="ghost"
@@ -74,6 +83,7 @@ export function SurferApp() {
             ref={fileInputRef}
             type="file"
             accept="image/*"
+            multiple
             className="hidden"
             onChange={(e) => {
               handleFiles(e.target.files);
@@ -83,13 +93,14 @@ export function SurferApp() {
         </div>
       </header>
 
-      <main className="relative flex min-h-0 flex-1 flex-col p-4 md:p-6">
-        <div className="min-h-0 flex-1">
+      <main className="relative flex min-h-0 flex-1 gap-4 p-4 md:p-6">
+        <div className="min-h-0 min-w-0 flex-1">
           <BreakdownCanvas />
         </div>
+        {libraryOpen && <LibraryPanel />}
         {dragging && (
           <div className="pointer-events-none absolute inset-2 z-10 flex items-center justify-center rounded-lg border-2 border-dashed border-primary bg-background/80">
-            <p className="text-lg font-medium">Drop an image to surf it</p>
+            <p className="text-lg font-medium">Drop images to surf them</p>
           </div>
         )}
       </main>
