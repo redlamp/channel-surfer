@@ -26,6 +26,9 @@ precision highp float;
 
 varying vec2 vUv;
 uniform sampler2D uSource;
+// Hue-map focal hue in [0,1]. 0.5 (180 deg) at rest; while the cursor is
+// over the hue-map tile it tracks the hovered pixel's hue (tweened on CPU).
+uniform float uTargetHue;
 
 /* RGB in [0,1] -> HSV (h, s, v each in [0,1]) */
 vec3 rgb2hsv(vec3 c) {
@@ -115,7 +118,7 @@ vec3 imageHue(vec3 color) {
   float sat = hsv.y;
 
   // Tunables (future settings-panel candidates).
-  float targetHue  = 180.0 / 360.0;
+  float targetHue  = uTargetHue;
   vec3 coolAccent  = hsv2rgb(vec3(200.0 / 360.0, 0.66, 0.5));
   vec3 warmAccent  = hsv2rgb(vec3( 40.0 / 360.0, 0.66, 0.5));
   float satThresh  = 0.01;
