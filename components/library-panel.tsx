@@ -169,7 +169,7 @@ export function LibraryPanel() {
   return (
     <aside className="flex w-72 shrink-0 flex-col overflow-hidden rounded-md border border-border bg-card shadow-[var(--shadow-sm)]">
       <div className="flex items-baseline justify-between border-b border-border px-3 py-2">
-        <h2 className="text-base font-semibold">Library</h2>
+        <h2 className="text-base font-semibold">Media Library</h2>
         <span className="font-mono text-base text-muted-foreground">
           {items.length} {items.length === 1 ? "image" : "images"}
         </span>
