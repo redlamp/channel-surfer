@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Canvas,
   useFrame,
@@ -339,18 +339,9 @@ function BreakdownScene({
     }, CLICK_DELAY_MS);
   };
 
-  const onDoubleClick = (e: ThreeEvent<MouseEvent>) => {
-    if (clickTimerRef.current !== null) {
-      window.clearTimeout(clickTimerRef.current);
-      clickTimerRef.current = null;
-    }
-    if (!e.uv) return;
-    const { tile } = tileFromUv(e.uv);
-    const { size } = get();
-    if (zoomedTileRef.current === tile) {
-      zoomedTileRef.current = null;
-      viewGoalRef.current = { x: 0, y: 0, zoom: fitAllZoom(size, aspect) };
-    } else {
+  const frameTile = useCallback(
+    (tile: number) => {
+      const { size } = get();
       zoomedTileRef.current = tile;
       const r = tileRect(tile, aspect);
       viewGoalRef.current = {
@@ -358,9 +349,63 @@ function BreakdownScene({
         y: r.cy,
         zoom: Math.min(size.width / r.w, size.height / r.h),
       };
+      invalidate();
+    },
+    [aspect, get, invalidate],
+  );
+
+  const onDoubleClick = (e: ThreeEvent<MouseEvent>) => {
+    if (clickTimerRef.current !== null) {
+      window.clearTimeout(clickTimerRef.current);
+      clickTimerRef.current = null;
     }
-    invalidate();
+    if (!e.uv) return;
+    const { tile } = tileFromUv(e.uv);
+    if (zoomedTileRef.current === tile) {
+      zoomedTileRef.current = null;
+      viewGoalRef.current = {
+        x: 0,
+        y: 0,
+        zoom: fitAllZoom(get().size, aspect),
+      };
+      invalidate();
+    } else {
+      frameTile(tile);
+    }
   };
+
+  // While framed on a tile, arrow keys step to the neighbor in the grid.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (zoomedTileRef.current === null) return;
+      // Leave keys alone when a form control (e.g. the settings sheet) has
+      // focus.
+      const t = e.target;
+      if (
+        t instanceof HTMLElement &&
+        (t.isContentEditable ||
+          ["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(t.tagName))
+      )
+        return;
+      const deltas: Record<string, [number, number]> = {
+        ArrowLeft: [-1, 0],
+        ArrowRight: [1, 0],
+        ArrowUp: [0, -1],
+        ArrowDown: [0, 1],
+      };
+      const d = deltas[e.key];
+      if (!d) return;
+      // Swallow the key even at the grid edge so the page never scrolls.
+      e.preventDefault();
+      const cur = zoomedTileRef.current;
+      const col = Math.min(Math.max((cur % 3) + d[0], 0), 2);
+      const row = Math.min(Math.max(Math.floor(cur / 3) + d[1], 0), 2);
+      const next = row * 3 + col;
+      if (next !== cur) frameTile(next);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [frameTile]);
 
   if (!texture) return null;
 
