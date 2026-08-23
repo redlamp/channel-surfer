@@ -22,6 +22,10 @@ const FIT_MARGIN = 0.94;
 const DEFAULT_TARGET_HUE = 0.5;
 /** Tile index of the hue map (row 2, col 1 in the grid). */
 const HUE_MAP_TILE = 3;
+/** Bottom row: the R/G/B channel tiles. */
+const RGB_TILES = [6, 7, 8];
+/** A click that waits this long with no second click is a single click. */
+const CLICK_DELAY_MS = 250;
 
 interface ViewGoal {
   x: number;
@@ -150,6 +154,16 @@ function BreakdownScene({
   const hueGoalRef = useRef(DEFAULT_TARGET_HUE);
   const viewGoalRef = useRef<ViewGoal | null>(null);
   const zoomedTileRef = useRef<number | null>(null);
+  const rgbColorizeGoalRef = useRef(0);
+  const clickTimerRef = useRef<number | null>(null);
+
+  useEffect(
+    () => () => {
+      if (clickTimerRef.current !== null)
+        window.clearTimeout(clickTimerRef.current);
+    },
+    [],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -194,8 +208,11 @@ function BreakdownScene({
 
   // Request a demand-mode frame only after the textured mesh has committed;
   // invalidating from the loader callback renders before the mesh exists.
+  // Also re-sync the colorize mode onto the freshly remounted material.
   useEffect(() => {
     if (!texture) return;
+    const mat = materialRef.current;
+    if (mat) mat.uniforms.uRgbColorize.value = rgbColorizeGoalRef.current;
     invalidate();
     return () => texture.dispose();
   }, [texture, invalidate]);
@@ -251,6 +268,16 @@ function BreakdownScene({
       } else if (cur !== goal) {
         mat.uniforms.uTargetHue.value = goal;
       }
+
+      const mixCur = mat.uniforms.uRgbColorize.value as number;
+      const mixGoal = rgbColorizeGoalRef.current;
+      if (Math.abs(mixGoal - mixCur) > 0.002) {
+        const k = 1 - Math.exp(-12 * dt);
+        mat.uniforms.uRgbColorize.value = mixCur + (mixGoal - mixCur) * k;
+        active = true;
+      } else if (mixCur !== mixGoal) {
+        mat.uniforms.uRgbColorize.value = mixGoal;
+      }
     }
 
     const goal = viewGoalRef.current;
@@ -303,7 +330,26 @@ function BreakdownScene({
     invalidate();
   };
 
+  const onClick = (e: ThreeEvent<MouseEvent>) => {
+    // Ignore drag-release "clicks" (delta = px between down and up).
+    if (!e.uv || e.delta > 4) return;
+    const { tile } = tileFromUv(e.uv);
+    if (!RGB_TILES.includes(tile)) return;
+    // Hold fire briefly so a double-click (framing) doesn't also toggle.
+    if (clickTimerRef.current !== null)
+      window.clearTimeout(clickTimerRef.current);
+    clickTimerRef.current = window.setTimeout(() => {
+      clickTimerRef.current = null;
+      rgbColorizeGoalRef.current = rgbColorizeGoalRef.current === 1 ? 0 : 1;
+      invalidate();
+    }, CLICK_DELAY_MS);
+  };
+
   const onDoubleClick = (e: ThreeEvent<MouseEvent>) => {
+    if (clickTimerRef.current !== null) {
+      window.clearTimeout(clickTimerRef.current);
+      clickTimerRef.current = null;
+    }
     if (!e.uv) return;
     const { tile } = tileFromUv(e.uv);
     const { size } = get();
@@ -331,6 +377,7 @@ function BreakdownScene({
         frustumCulled={false}
         onPointerMove={onPointerMove}
         onPointerOut={onPointerOut}
+        onClick={onClick}
         onDoubleClick={onDoubleClick}
       >
         <planeGeometry args={[1, 1]} />
@@ -343,6 +390,7 @@ function BreakdownScene({
           uniforms={{
             uSource: { value: texture },
             uTargetHue: { value: DEFAULT_TARGET_HUE },
+            uRgbColorize: { value: 0 },
           }}
           depthTest={false}
           depthWrite={false}

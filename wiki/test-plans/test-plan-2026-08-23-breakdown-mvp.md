@@ -34,3 +34,8 @@ Run `bun run dev` → http://localhost:7847
 - [ ] Double-click a tile → camera tweens to frame just that tile;
       double-click it again → tweens back to the full grid
 - [ ] Grabbing/panning mid-tween cancels the tween without fighting you
+- [ ] Single-click any R/G/B tile → all three cross-fade between
+      black-to-white and black-to-color (red/green/blue tints)
+- [ ] Double-clicking an R/G/B tile frames it WITHOUT toggling the
+      colorize mode (single-click waits out the double-click window)
+- [ ] A drag that ends on an R/G/B tile does not toggle the mode
