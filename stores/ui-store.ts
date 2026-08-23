@@ -21,16 +21,39 @@ interface UiState {
   pinnedColor: SampledColor | null;
   /** The WebGL canvas element, for PNG export. */
   canvasEl: HTMLCanvasElement | null;
+  /** Tile currently framed by focus mode, null when viewing the grid. */
+  framedTile: number | null;
+  /** Focus-mode isolation: hide the non-focused tiles while framed. */
+  isolate: boolean;
   setHoverColor: (c: SampledColor | null) => void;
   setPinnedColor: (c: SampledColor | null) => void;
   setCanvasEl: (el: HTMLCanvasElement | null) => void;
+  setFramedTile: (tile: number | null) => void;
+  setIsolate: (on: boolean) => void;
 }
+
+/**
+ * Non-reactive bridge between the canvas scene (inside R3F) and its DOM
+ * shell. Mutated from effects, handlers, and useFrame — never from render
+ * — and deliberately not React state: these values change per frame.
+ */
+export const canvasBridge = {
+  tintBarEl: null as HTMLDivElement | null,
+  tintBarHover: false,
+  meshDblAt: 0,
+  invalidate: null as (() => void) | null,
+  refit: null as (() => void) | null,
+};
 
 export const useUiStore = create<UiState>((set) => ({
   hoverColor: null,
   pinnedColor: null,
   canvasEl: null,
+  framedTile: null,
+  isolate: false,
   setHoverColor: (hoverColor) => set({ hoverColor }),
   setPinnedColor: (pinnedColor) => set({ pinnedColor }),
   setCanvasEl: (canvasEl) => set({ canvasEl }),
+  setFramedTile: (framedTile) => set({ framedTile }),
+  setIsolate: (isolate) => set({ isolate }),
 }));

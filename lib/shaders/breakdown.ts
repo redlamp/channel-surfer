@@ -39,9 +39,20 @@ uniform float uHoverTile;
 uniform float uColorModel;
 // Hue-map rendering: 0 warm/cool accents, 1 proximity glow, 2 distance bands.
 uniform float uHueMapStyle;
-// Outline half-width in intra-tile UV units per axis, precomputed on CPU
-// from camera zoom so the line stays a constant screen width.
-uniform vec2 uOutlineUv;
+// Intra-tile UV units per screen pixel, per axis — computed on CPU from
+// camera zoom so outlines and rings keep constant screen size.
+uniform vec2 uUvPerPx;
+// Pinned sample position in intra-tile UV (v up); x < 0 = no pin. A ring
+// is drawn at this spot on every tile.
+uniform vec2 uPinUv;
+// Cursor position in intra-tile UV; a small echo ring marks the matching
+// spot on every tile EXCEPT the hovered one. x < 0 = none.
+uniform vec2 uHoverUv;
+// Focus-mode isolation: when >= 0, only this tile renders (others discard).
+uniform float uIsolateTile;
+// Source peek (hold space while framed): this tile renders the untouched
+// source instead of its transform. -1 = off.
+uniform float uPeekTile;
 
 /* RGB in [0,1] -> HSV (h, s, v each in [0,1]) */
 vec3 rgb2hsv(vec3 c) {
@@ -193,9 +204,14 @@ void main() {
   int row = 2 - int(min(floor(grid.y), 2.0));
   int tileIndex = row * 3 + col;
 
+  // Focus-mode isolation: everything but the focused tile disappears.
+  if (uIsolateTile > -0.5 && tileIndex != int(uIsolateTile + 0.5)) discard;
+
   vec3 color = texture2D(uSource, tileUv).rgb;
 
-  if      (tileIndex == 0) color = imageSource(color);
+  bool peek = uPeekTile > -0.5 && tileIndex == int(uPeekTile + 0.5);
+  if      (peek)           color = imageSource(color);
+  else if (tileIndex == 0) color = imageSource(color);
   else if (tileIndex == 1) color = imageMaxSat(color);
   else if (tileIndex == 2) color = imageMaxSatMaxVal(color);
   else if (tileIndex == 3) color = imageHue(color);
@@ -207,11 +223,35 @@ void main() {
 
   color = linearToSRGB(color);
 
+  // Hover outline: constant 2px edge on the hovered tile.
   if (uHoverTile > -0.5 && tileIndex == int(uHoverTile + 0.5)) {
+    vec2 w = uUvPerPx * 2.0;
     bool onEdge =
-      tileUv.x < uOutlineUv.x || tileUv.x > 1.0 - uOutlineUv.x ||
-      tileUv.y < uOutlineUv.y || tileUv.y > 1.0 - uOutlineUv.y;
+      tileUv.x < w.x || tileUv.x > 1.0 - w.x ||
+      tileUv.y < w.y || tileUv.y > 1.0 - w.y;
     if (onEdge) color = vec3(1.0);
+  }
+
+  // Cursor echo: small ring at the matching spot on the OTHER tiles.
+  // Rings are drawn with smoothstep feathering (~1px) so they stay clean
+  // on the antialias:false canvas.
+  if (uHoverUv.x > -0.5 &&
+      (uHoverTile < -0.5 || tileIndex != int(uHoverTile + 0.5))) {
+    // Echo rings sit at 50% alpha so they annotate without covering.
+    float d = abs(length((tileUv - uHoverUv) / uUvPerPx) - 5.0);
+    float halo = 1.0 - smoothstep(1.1, 2.2, d);
+    color = mix(color, vec3(0.0), halo * 0.5);
+    float ring = 1.0 - smoothstep(0.6, 1.5, d);
+    color = mix(color, vec3(1.0), ring * 0.5);
+  }
+
+  // Pinned sample: larger ring at the pinned spot on every tile.
+  if (uPinUv.x > -0.5) {
+    float d = abs(length((tileUv - uPinUv) / uUvPerPx) - 9.0);
+    float halo = 1.0 - smoothstep(1.6, 3.0, d);
+    color = mix(color, vec3(0.0), halo * 0.85);
+    float ring = 1.0 - smoothstep(1.0, 2.0, d);
+    color = mix(color, vec3(1.0), ring);
   }
 
   gl_FragColor = vec4(color, 1.0);
