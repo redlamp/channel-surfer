@@ -23,6 +23,11 @@ interface SettingsState {
   rgbFloat: boolean;
   /** Labs: reveal experimental options (the non-default hue-map styles). */
   labs: boolean;
+  /** Show the color-taylor Hexagon (HSB wheel) below the canvas. */
+  showColorHexagon: boolean;
+  /** Tile math space: linear light (the Gigi original) or sRGB values
+   * (matches how the readouts and most tools compute HSB). */
+  colorMath: "linear" | "srgb";
   setHighlightMode: (mode: HighlightMode) => void;
   setRgbColorize: (on: boolean) => void;
   setColorModel: (model: ColorModel) => void;
@@ -30,6 +35,8 @@ interface SettingsState {
   setShowColorSteps: (on: boolean) => void;
   setRgbFloat: (on: boolean) => void;
   setLabs: (on: boolean) => void;
+  setShowColorHexagon: (on: boolean) => void;
+  setColorMath: (space: "linear" | "srgb") => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -42,6 +49,8 @@ export const useSettingsStore = create<SettingsState>()(
       showColorSteps: false,
       rgbFloat: false,
       labs: false,
+      showColorHexagon: false,
+      colorMath: "linear",
       setHighlightMode: (highlightMode) => set({ highlightMode }),
       setRgbColorize: (rgbColorize) => set({ rgbColorize }),
       setColorModel: (colorModel) => set({ colorModel }),
@@ -49,6 +58,8 @@ export const useSettingsStore = create<SettingsState>()(
       setShowColorSteps: (showColorSteps) => set({ showColorSteps }),
       setRgbFloat: (rgbFloat) => set({ rgbFloat }),
       setLabs: (labs) => set({ labs }),
+      setShowColorHexagon: (showColorHexagon) => set({ showColorHexagon }),
+      setColorMath: (colorMath) => set({ colorMath }),
     }),
     {
       name: "channel-surfer:settings",

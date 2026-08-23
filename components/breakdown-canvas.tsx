@@ -87,11 +87,18 @@ function srgbToLinear(c8: number) {
   return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
 }
 
-/** Hue of an sRGB pixel, computed in linear light like the shader; null for greys. */
-function pixelHue(data: Uint8ClampedArray, i: number): number | null {
-  const r = srgbToLinear(data[i]);
-  const g = srgbToLinear(data[i + 1]);
-  const b = srgbToLinear(data[i + 2]);
+/** Hue of an sRGB pixel, computed in the same space as the shader (linear
+ * light by default, raw sRGB when the Color math setting says so); null
+ * for greys. */
+function pixelHue(
+  data: Uint8ClampedArray,
+  i: number,
+  linear: boolean,
+): number | null {
+  const cv = (v: number) => (linear ? srgbToLinear(v) : v / 255);
+  const r = cv(data[i]);
+  const g = cv(data[i + 1]);
+  const b = cv(data[i + 2]);
   const max = Math.max(r, g, b);
   const min = Math.min(r, g, b);
   const diff = max - min;
@@ -161,11 +168,12 @@ function BreakdownScene({
   // make sure a change requests the frame that applies it.
   const colorModel = useSettingsStore((s) => s.colorModel);
   const hueMapStyle = useSettingsStore((s) => s.hueMapStyle);
+  const colorMath = useSettingsStore((s) => s.colorMath);
   const framedTileUi = useUiStore((s) => s.framedTile);
   const isolateUi = useUiStore((s) => s.isolate);
   useEffect(() => {
     invalidate();
-  }, [colorModel, hueMapStyle, framedTileUi, isolateUi, invalidate]);
+  }, [colorModel, hueMapStyle, colorMath, framedTileUi, isolateUi, invalidate]);
 
   useEffect(() => {
     hoverTileRef.current = hoverTile;
@@ -299,6 +307,7 @@ function BreakdownScene({
       mat.uniforms.uHoverTile.value = hoverTileRef.current ?? -1;
       const settings = useSettingsStore.getState();
       mat.uniforms.uHueMapStyle.value = HUE_STYLE_INDEX[settings.hueMapStyle];
+      mat.uniforms.uSrgbMath.value = settings.colorMath === "srgb" ? 1 : 0;
 
       // HSB <-> HSL cross-fade: ease uColorModel toward the setting.
       const modelCur = mat.uniforms.uColorModel.value as number;
@@ -471,7 +480,11 @@ function BreakdownScene({
       });
       if (picking) {
         // Greys have no hue — hold the current target rather than jumping.
-        const h = pixelHue(id.data, i);
+        const h = pixelHue(
+          id.data,
+          i,
+          useSettingsStore.getState().colorMath === "linear",
+        );
         if (h !== null) hueGoalRef.current = h;
       }
     }
@@ -688,6 +701,7 @@ function BreakdownScene({
             uColorModel: { value: 0 },
             uHueMapStyle: { value: 0 },
             uTime: { value: 0 },
+            uSrgbMath: { value: 0 },
           }
         : null,
     [texture],

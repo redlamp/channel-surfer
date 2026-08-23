@@ -44,6 +44,9 @@ uniform float uColorModel;
 uniform float uHueMapStyle;
 // Seconds, monotonically increasing; only the crawl style consumes it.
 uniform float uTime;
+// 0 = transforms run in linear light (the Gigi original); 1 = transforms
+// run on sRGB values, matching how the readouts and most tools compute.
+uniform float uSrgbMath;
 // Intra-tile UV units per screen pixel, per axis — computed on CPU from
 // camera zoom so outlines and rings keep constant screen size.
 uniform vec2 uUvPerPx;
@@ -241,6 +244,9 @@ void main() {
   if (uIsolateTile > -0.5 && tileIndex != int(uIsolateTile + 0.5)) discard;
 
   vec3 color = texture2D(uSource, tileUv).rgb;
+  // sRGB math mode converts up front and skips the output conversion, so
+  // every transform sees the same values the readouts compute on.
+  if (uSrgbMath > 0.5) color = linearToSRGB(color);
 
   bool peek = uPeekTile > -0.5 && tileIndex == int(uPeekTile + 0.5);
   bool tintTile = !peek && tileIndex >= 6;
@@ -256,11 +262,14 @@ void main() {
   else if (tileIndex == 7) { tint = vec3(0.0, color.g, 0.0); color = vec3(color.g); }
   else                     { tint = vec3(0.0, 0.0, color.b); color = vec3(color.b); }
 
-  color = linearToSRGB(color);
+  if (uSrgbMath < 0.5) color = linearToSRGB(color);
 
   // Tint cross-fades in sRGB space. A linear-light mix front-loads the
   // perceptible change when fading back to white, which read as a snap.
-  if (tintTile) color = mix(color, linearToSRGB(tint), uRgbColorize);
+  if (tintTile) {
+    vec3 tintSrgb = (uSrgbMath > 0.5) ? tint : linearToSRGB(tint);
+    color = mix(color, tintSrgb, uRgbColorize);
+  }
 
   // Hover outline: constant 2px edge on the hovered tile.
   if (uHoverTile > -0.5 && tileIndex == int(uHoverTile + 0.5)) {
