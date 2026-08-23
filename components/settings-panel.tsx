@@ -83,6 +83,8 @@ export function SettingsPanel({
   const setHueMapStyle = useSettingsStore((s) => s.setHueMapStyle);
   const showColorSteps = useSettingsStore((s) => s.showColorSteps);
   const setShowColorSteps = useSettingsStore((s) => s.setShowColorSteps);
+  const rgbFloat = useSettingsStore((s) => s.rgbFloat);
+  const setRgbFloat = useSettingsStore((s) => s.setRgbFloat);
 
   return (
     <DialogPrimitive.Root
@@ -169,6 +171,21 @@ export function SettingsPanel({
             </div>
 
             <div className="space-y-2">
+              <Label>RGB values</Label>
+              <Segmented
+                value={rgbFloat ? "float" : "int"}
+                options={[
+                  { value: "int", label: "0–255" },
+                  { value: "float", label: "0.0–1.0" },
+                ]}
+                onChange={(v) => setRgbFloat(v === "float")}
+              />
+              <p className="text-base text-muted-foreground">
+                How the readout rows print RGB channels.
+              </p>
+            </div>
+
+            <div className="space-y-2">
               <Label>Color steps</Label>
               <Segmented
                 value={showColorSteps ? "show" : "hide"}
@@ -195,6 +212,7 @@ export function SettingsPanel({
                 setColorModel("hsb");
                 setHueMapStyle("warmcool");
                 setShowColorSteps(false);
+                setRgbFloat(false);
               }}
             >
               Reset to defaults

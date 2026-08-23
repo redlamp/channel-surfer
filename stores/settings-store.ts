@@ -19,11 +19,14 @@ interface SettingsState {
   hueMapStyle: HueMapStyle;
   /** Show the color-taylor style hex/HSB derivation steps for the hovered pixel. */
   showColorSteps: boolean;
+  /** Readout RGB values as 0.0-1.0 floats instead of 0-255 ints. */
+  rgbFloat: boolean;
   setHighlightMode: (mode: HighlightMode) => void;
   setRgbColorize: (on: boolean) => void;
   setColorModel: (model: ColorModel) => void;
   setHueMapStyle: (style: HueMapStyle) => void;
   setShowColorSteps: (on: boolean) => void;
+  setRgbFloat: (on: boolean) => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -34,11 +37,13 @@ export const useSettingsStore = create<SettingsState>()(
       colorModel: "hsb",
       hueMapStyle: "warmcool",
       showColorSteps: false,
+      rgbFloat: false,
       setHighlightMode: (highlightMode) => set({ highlightMode }),
       setRgbColorize: (rgbColorize) => set({ rgbColorize }),
       setColorModel: (colorModel) => set({ colorModel }),
       setHueMapStyle: (hueMapStyle) => set({ hueMapStyle }),
       setShowColorSteps: (showColorSteps) => set({ showColorSteps }),
+      setRgbFloat: (rgbFloat) => set({ rgbFloat }),
     }),
     {
       name: "channel-surfer:settings",
