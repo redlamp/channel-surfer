@@ -61,10 +61,10 @@ const HUE_STYLE_OPTIONS: { value: HueMapStyle; label: string }[] = [
 ];
 
 /**
- * Settings as a right-edge sheet (the color-taylor pattern): base-ui
- * Dialog supplies portal, backdrop, focus trap, Escape and click-outside.
- * The scrim is deliberately faint — the settings are judged by watching
- * the canvas while you toggle them.
+ * Settings as a right-edge sheet (the color-taylor pattern), but
+ * non-modal: no scrim and no focus trap, so it reads as a sidebar like
+ * the Media Library — the settings are judged by watching the canvas
+ * respond while you toggle them.
  */
 export function SettingsPanel({
   open,
@@ -87,12 +87,12 @@ export function SettingsPanel({
   return (
     <DialogPrimitive.Root
       open={open}
+      modal={false}
       onOpenChange={(next) => {
         if (!next) onClose();
       }}
     >
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Backdrop className="fixed inset-0 isolate z-50 bg-black/20 duration-200 data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0" />
         <DialogPrimitive.Popup
           className={
             "fixed top-0 right-0 bottom-0 z-50 flex w-[min(88vw,380px)] flex-col " +
