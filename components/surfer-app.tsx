@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ImageUp, LibraryBig, Settings2 } from "lucide-react";
+import { Download, ImageUp, LibraryBig, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BreakdownCanvas } from "@/components/breakdown-canvas";
 import { ColorReadout } from "@/components/color-readout";
@@ -9,6 +9,7 @@ import { ColorSteps } from "@/components/color-steps";
 import { LibraryPanel } from "@/components/library-panel";
 import { SettingsPanel } from "@/components/settings-panel";
 import { useSourceStore } from "@/stores/source-store";
+import { useUiStore } from "@/stores/ui-store";
 
 export function SurferApp() {
   const name = useSourceStore((s) => s.name);
@@ -53,7 +54,7 @@ export function SurferApp() {
       <header className="flex items-center justify-between gap-4 border-b border-border px-4 py-3 md:px-6">
         <div className="shrink-0">
           <h1 className="font-mono text-xl font-semibold tracking-tight">
-            Channel Surfer <span aria-hidden>🌈🏄</span>
+            Channel Surfer <span aria-hidden>🏄🌈</span>
           </h1>
           <p className="text-base text-muted-foreground">
             How RGB and HSB channels build an image
@@ -66,6 +67,27 @@ export function SurferApp() {
           <Button onClick={() => fileInputRef.current?.click()}>
             <ImageUp aria-hidden />
             Open images
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Export breakdown as PNG"
+            title="Export breakdown as PNG"
+            onClick={() => {
+              const canvas = useUiStore.getState().canvasEl;
+              if (!canvas) return;
+              canvas.toBlob((blob) => {
+                if (!blob) return;
+                const a = document.createElement("a");
+                a.href = URL.createObjectURL(blob);
+                const base = name.replace(/\.[a-z0-9]+$/i, "") || "breakdown";
+                a.download = `channel-surfer-${base}.png`;
+                a.click();
+                URL.revokeObjectURL(a.href);
+              });
+            }}
+          >
+            <Download aria-hidden />
           </Button>
           <Button
             variant="ghost"
