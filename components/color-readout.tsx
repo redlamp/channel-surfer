@@ -47,10 +47,15 @@ function ValueCell({
 
 function ReadoutRow({
   sample,
+  active,
   icon,
   title,
 }: {
+  /** Values to display — the live sample, or a held/placeholder one. */
   sample: SampledColor | null;
+  /** False renders the row dimmed and non-interactive, keeping the
+   * layout target in place when nothing is hovered/pinned. */
+  active: boolean;
   icon: React.ReactNode;
   title: string;
 }) {
@@ -64,9 +69,7 @@ function ReadoutRow({
     return () => window.clearTimeout(t);
   }, [copied]);
 
-  // Render an invisible placeholder row when absent so the header never
-  // changes height as samples come and go.
-  const { r, g, b } = sample ?? { r: 0, g: 0, b: 0 };
+  const { r, g, b } = sample ?? { r: 128, g: 128, b: 128 };
   const hex = rgbToHex(r, g, b);
   const fmt = (v: number) => (rgbFloat ? (v / 255).toFixed(3) : String(v));
   const rgbWidth = rgbFloat ? 5 : 3;
@@ -85,13 +88,13 @@ function ReadoutRow({
     <button
       type="button"
       title={`${title} — copy hex`}
-      disabled={!sample}
+      disabled={!active}
       onClick={() => {
         void navigator.clipboard?.writeText(hex).then(() => setCopied(true));
       }}
       className={cn(
-        "flex cursor-pointer items-center gap-2 rounded-md px-2 py-0.5 font-mono text-base whitespace-pre transition-colors hover:bg-muted",
-        sample ? "opacity-100" : "pointer-events-none opacity-0",
+        "flex cursor-pointer items-center gap-2 rounded-md px-2 py-0.5 font-mono text-base whitespace-pre transition-opacity hover:bg-muted",
+        active ? "opacity-100" : "pointer-events-none opacity-40",
       )}
     >
       <span className="text-muted-foreground">{icon}</span>
@@ -131,17 +134,20 @@ function ReadoutRow({
  * rows; clicking a row copies its hex. */
 export function ColorReadout() {
   const hoverColor = useUiStore((s) => s.hoverColor);
+  const lastHoverColor = useUiStore((s) => s.lastHoverColor);
   const pinnedColor = useUiStore((s) => s.pinnedColor);
 
   return (
     <div className="flex flex-col items-end gap-0.5">
       <ReadoutRow
         sample={pinnedColor}
+        active={pinnedColor !== null}
         icon={<MapPin className="size-4" aria-hidden />}
         title="Pinned color"
       />
       <ReadoutRow
-        sample={hoverColor}
+        sample={hoverColor ?? lastHoverColor}
+        active={hoverColor !== null}
         icon={<Crosshair className="size-4" aria-hidden />}
         title="Hovered color"
       />

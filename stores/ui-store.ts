@@ -17,6 +17,8 @@ export interface SampledColor {
 interface UiState {
   /** Live color under the cursor, null when not over the grid. */
   hoverColor: SampledColor | null;
+  /** Last non-null hover sample — lets panels stay populated off-hover. */
+  lastHoverColor: SampledColor | null;
   /** Pinned sample (single pin), survives hover. */
   pinnedColor: SampledColor | null;
   /** The WebGL canvas element, for PNG export. */
@@ -47,11 +49,13 @@ export const canvasBridge = {
 
 export const useUiStore = create<UiState>((set) => ({
   hoverColor: null,
+  lastHoverColor: null,
   pinnedColor: null,
   canvasEl: null,
   framedTile: null,
   isolate: false,
-  setHoverColor: (hoverColor) => set({ hoverColor }),
+  setHoverColor: (hoverColor) =>
+    set(hoverColor ? { hoverColor, lastHoverColor: hoverColor } : { hoverColor }),
   setPinnedColor: (pinnedColor) => set({ pinnedColor }),
   setCanvasEl: (canvasEl) => set({ canvasEl }),
   setFramedTile: (framedTile) => set({ framedTile }),

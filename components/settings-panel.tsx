@@ -1,6 +1,6 @@
 "use client";
 
-import { X } from "lucide-react";
+import { FlaskConical, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
@@ -79,6 +79,8 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
   const setShowColorSteps = useSettingsStore((s) => s.setShowColorSteps);
   const rgbFloat = useSettingsStore((s) => s.rgbFloat);
   const setRgbFloat = useSettingsStore((s) => s.setRgbFloat);
+  const labs = useSettingsStore((s) => s.labs);
+  const setLabs = useSettingsStore((s) => s.setLabs);
 
   return (
     <aside className="flex w-80 shrink-0 flex-col overflow-hidden rounded-md border border-border bg-card shadow-[var(--shadow-sm)]">
@@ -108,19 +110,22 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           </p>
         </div>
 
-        <div className="space-y-2">
-          <Label>Hue map style</Label>
-          <Segmented
-            value={hueMapStyle}
-            options={HUE_STYLE_OPTIONS}
-            onChange={setHueMapStyle}
-          />
-          <p className="text-base text-muted-foreground">
-            The four research candidates plus the original: warm/cool
-            accents, twilight cyclic ramp, glow with quarter-turn landmarks,
-            four-landmark diamond, or crawling bands (direction = motion).
-          </p>
-        </div>
+        {labs && (
+          <div className="space-y-2">
+            <Label>
+              <FlaskConical className="size-4" aria-hidden /> Hue map style
+            </Label>
+            <Segmented
+              value={hueMapStyle}
+              options={HUE_STYLE_OPTIONS}
+              onChange={setHueMapStyle}
+            />
+            <p className="text-base text-muted-foreground">
+              Twilight is the shipping style; the rest are experiments from
+              the hue-direction research.
+            </p>
+          </div>
+        )}
 
         <div className="space-y-2">
           <Label>Tint (RGB channel tiles)</Label>
@@ -182,20 +187,31 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
         </div>
       </div>
 
-      <div className="border-t border-border px-3 py-2">
+      <div className="flex gap-2 border-t border-border px-3 py-2">
         <Button
           variant="secondary"
-          className="w-full"
+          className="flex-1"
           onClick={() => {
             setHighlightMode("tile");
             setRgbColorize(false);
             setColorModel("hsb");
-            setHueMapStyle("warmcool");
+            setHueMapStyle("twilight");
             setShowColorSteps(false);
             setRgbFloat(false);
           }}
         >
           Reset to defaults
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label="Toggle Labs (experimental options)"
+          title="Labs — experimental options"
+          aria-pressed={labs}
+          className={labs ? "text-foreground" : "text-muted-foreground"}
+          onClick={() => setLabs(!labs)}
+        >
+          <FlaskConical aria-hidden />
         </Button>
       </div>
     </aside>

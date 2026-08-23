@@ -59,9 +59,14 @@ export function ColorSteps() {
   const colorModel = useSettingsStore((s) => s.colorModel);
   const hoverColor = useUiStore((s) => s.hoverColor);
   const pinnedColor = useUiStore((s) => s.pinnedColor);
+  const lastHoverColor = useUiStore((s) => s.lastHoverColor);
 
-  const sample = hoverColor ?? pinnedColor;
-  if (!show || !sample) return null;
+  if (!show) return null;
+  // Always rendered while enabled — holding the last sample keeps the
+  // layout stable instead of the panel popping in and out with hover.
+  const sample = hoverColor ??
+    pinnedColor ??
+    lastHoverColor ?? { r: 128, g: 128, b: 128 };
 
   const { r, g, b } = sample;
   const max = Math.max(r, g, b);
