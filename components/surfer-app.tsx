@@ -8,7 +8,7 @@ import { ColorReadout } from "@/components/color-readout";
 import { ColorSteps } from "@/components/color-steps";
 import { LibraryPanel } from "@/components/library-panel";
 import { SettingsPanel } from "@/components/settings-panel";
-import { useSourceStore } from "@/stores/source-store";
+import { DEMO_ID, useSourceStore } from "@/stores/source-store";
 import { useUiStore } from "@/stores/ui-store";
 
 export function SurferApp() {
@@ -30,10 +30,41 @@ export function SurferApp() {
   const handleFiles = useCallback(
     (files: FileList | null) => {
       if (!files || files.length === 0) return;
-      void loadFiles(Array.from(files));
+      // Open the library so freshly added images visibly land somewhere.
+      void loadFiles(Array.from(files)).then(() => setLibraryOpen(true));
     },
     [loadFiles],
   );
+
+  // PgUp/PgDn step through the media library (display order: newest
+  // first, demo last).
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "PageUp" && e.key !== "PageDown") return;
+      const t = e.target;
+      if (
+        t instanceof HTMLElement &&
+        (t.isContentEditable ||
+          ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName))
+      )
+        return;
+      e.preventDefault();
+      const s = useSourceStore.getState();
+      const order = [...s.items.map((i) => i.id)].reverse();
+      order.push(DEMO_ID);
+      const idx = Math.max(order.indexOf(s.currentId), 0);
+      const next =
+        e.key === "PageDown"
+          ? Math.min(idx + 1, order.length - 1)
+          : Math.max(idx - 1, 0);
+      if (next === idx) return;
+      const id = order[next];
+      if (id === DEMO_ID) s.resetToDemo();
+      else s.select(id);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   return (
     <div
@@ -92,7 +123,8 @@ export function SurferApp() {
           <Button
             variant="ghost"
             size="icon"
-            aria-label="Toggle library"
+            aria-label="Media Library"
+            title="Media Library"
             aria-pressed={libraryOpen}
             onClick={() => setLibraryOpen((v) => !v)}
           >
