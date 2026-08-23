@@ -420,23 +420,53 @@ function BreakdownScene({
       }
     }
 
-    // Hexagon hover card: loosely follows the cursor, flipping to the
-    // quadrant opposite the pointer so the image stays unobstructed.
+    // Hexagon hover card: sits OUTSIDE the hovered tile, sliding along
+    // its edge with the cursor. Prefers the side with more canvas room;
+    // when no side fits (a framed tile filling the view), falls back to
+    // the quadrant opposite the pointer. Loosely eased either way.
     const card = canvasBridge.hexCardEl;
     if (card) {
       const p = pointerPosRef.current;
+      const tile = hoverTileRef.current;
       const wanted =
         p !== null &&
-        hoverTileRef.current !== null &&
+        tile !== null &&
         useSettingsStore.getState().showColorHexagon;
-      if (wanted && p) {
+      if (wanted && p && state.camera instanceof THREE.OrthographicCamera) {
         const cw = card.offsetWidth || 200;
         const chh = card.offsetHeight || 200;
-        const gap = 28;
-        const tx = p.x > state.size.width / 2 ? p.x - cw - gap : p.x + gap;
-        const ty = p.y > state.size.height / 2 ? p.y - chh - gap : p.y + gap;
-        const gx = Math.min(Math.max(tx, 8), state.size.width - cw - 8);
-        const gy = Math.min(Math.max(ty, 8), state.size.height - chh - 8);
+        const { width: sw, height: sh } = state.size;
+        const cam = state.camera;
+        const r = tileRect(tile as number, aspect);
+        const x0 = (r.cx - r.w / 2 - cam.position.x) * cam.zoom + sw / 2;
+        const x1 = (r.cx + r.w / 2 - cam.position.x) * cam.zoom + sw / 2;
+        const y0 = -(r.cy + r.h / 2 - cam.position.y) * cam.zoom + sh / 2;
+        const y1 = -(r.cy - r.h / 2 - cam.position.y) * cam.zoom + sh / 2;
+        const gap = 16;
+        const clampX = (v: number) => Math.min(Math.max(v, 8), sw - cw - 8);
+        const clampY = (v: number) => Math.min(Math.max(v, 8), sh - chh - 8);
+        let gx: number;
+        let gy: number;
+        const fitsRight = x1 + gap + cw + 8 <= sw;
+        const fitsLeft = x0 - gap - cw >= 8;
+        const fitsBelow = y1 + gap + chh + 8 <= sh;
+        const fitsAbove = y0 - gap - chh >= 8;
+        if (fitsRight || fitsLeft) {
+          gx =
+            fitsRight && (!fitsLeft || sw - x1 >= x0)
+              ? x1 + gap
+              : x0 - gap - cw;
+          gy = clampY(p.y - chh / 2);
+        } else if (fitsBelow || fitsAbove) {
+          gy =
+            fitsBelow && (!fitsAbove || sh - y1 >= y0)
+              ? y1 + gap
+              : y0 - gap - chh;
+          gx = clampX(p.x - cw / 2);
+        } else {
+          gx = clampX(p.x > sw / 2 ? p.x - cw - 28 : p.x + 28);
+          gy = clampY(p.y > sh / 2 ? p.y - chh - 28 : p.y + 28);
+        }
         let cur = hexCardPosRef.current;
         if (!cur) {
           cur = { x: gx, y: gy };
