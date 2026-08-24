@@ -65,6 +65,11 @@ export const canvasBridge = {
   refit: null as (() => void) | null,
   /** The hexagon hover card, positioned per-frame by the scene. */
   hexCardEl: null as HTMLDivElement | null,
+  /** Live pointer count over the canvas (capture-phase tracked). */
+  pointerCount: 0,
+  /** True from the moment a second pointer joins until shortly after all
+   * lift — suppresses loop drags and click-pins during two-finger pans. */
+  multiTouch: false,
 };
 
 export const useUiStore = create<UiState>((set) => ({

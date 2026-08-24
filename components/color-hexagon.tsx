@@ -194,6 +194,8 @@ function StemChain({
           : { filter: "drop-shadow(0 1px 1.5px rgba(0,0,0,0.5))" }
       }
     >
+      {/* Origin dot first, so stems and handles draw over it. */}
+      <circle cx={CENTER} cy={CENTER} r={2.5} fill="#ff0000" />
       {(["r", "g", "b"] as const).map(
         (ch, i) =>
           sample[ch] > 0 && (
@@ -221,7 +223,6 @@ function StemChain({
           strokeWidth={3}
         />
       ))}
-      <circle cx={CENTER} cy={CENTER} r={2.5} fill="#ff0000" />
     </g>
   );
 }
