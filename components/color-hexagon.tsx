@@ -266,14 +266,16 @@ export function HexagonInner({ labels = true }: { labels?: boolean }) {
           const ex = CENTER + markR * Math.cos(h * DEG);
           const ey = CENTER - markR * Math.sin(h * DEG);
           return (
-            <g>
+            // White stem + handle, with a 1px right/down shadow at 50%
+            // black so the pair lifts off any wheel color.
+            <g style={{ filter: "drop-shadow(1px 1px 0 rgba(0,0,0,0.5))" }}>
               <line
                 x1={CENTER}
                 y1={CENTER}
                 x2={ex}
                 y2={ey}
-                stroke="rgba(255,255,255,0.5)"
-                strokeWidth={1.5}
+                stroke="#ffffff"
+                strokeWidth={2}
                 strokeDasharray="4 4"
               />
               <circle
@@ -281,9 +283,8 @@ export function HexagonInner({ labels = true }: { labels?: boolean }) {
                 cy={ey}
                 r={7}
                 fill={rgbToHex(active.r, active.g, active.b)}
-                stroke="rgba(255,255,255,0.9)"
-                strokeWidth={1.5}
-                style={{ filter: "drop-shadow(0 0 1.5px rgba(0,0,0,0.8))" }}
+                stroke="#ffffff"
+                strokeWidth={2.5}
               />
             </g>
           );
