@@ -10,7 +10,10 @@ const SITE_URL = `https://redlamp.github.io${process.env.NEXT_PUBLIC_BASE_PATH ?
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
-  title: "Channel Surfer 🏄🌈",
+  // No emoji here: the favicon now carries the mark in the tab, and the
+  // pair read as redundant. The social titles keep theirs — cards show
+  // no favicon.
+  title: "Channel Surfer",
   description:
     "Break an image into its RGB and HSB channels to see how each contributes to the final picture.",
   openGraph: {
