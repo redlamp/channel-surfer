@@ -25,6 +25,14 @@ interface UiState {
   canvasEl: HTMLCanvasElement | null;
   /** Tile currently under the cursor, null when not over the grid. */
   hoverTile: number | null;
+  /** The hexagon widget: docked in the header or floating anywhere.
+   * x/y are the floating card's viewport position. */
+  hexWidget: {
+    mode: "docked" | "floating";
+    size: number;
+    x: number;
+    y: number;
+  };
   /** Tile currently framed by focus mode, null when viewing the grid. */
   framedTile: number | null;
   /** Focus-mode isolation: hide the non-focused tiles while framed. */
@@ -35,6 +43,7 @@ interface UiState {
   setHoverTile: (tile: number | null) => void;
   setFramedTile: (tile: number | null) => void;
   setIsolate: (on: boolean) => void;
+  setHexWidget: (patch: Partial<UiState["hexWidget"]>) => void;
 }
 
 /**
@@ -60,6 +69,7 @@ export const useUiStore = create<UiState>((set) => ({
   hoverTile: null,
   framedTile: null,
   isolate: false,
+  hexWidget: { mode: "docked", size: 81, x: 24, y: 90 },
   setHoverColor: (hoverColor) =>
     set(hoverColor ? { hoverColor, lastHoverColor: hoverColor } : { hoverColor }),
   setPinnedColor: (pinnedColor) => set({ pinnedColor }),
@@ -67,4 +77,6 @@ export const useUiStore = create<UiState>((set) => ({
   setHoverTile: (hoverTile) => set({ hoverTile }),
   setFramedTile: (framedTile) => set({ framedTile }),
   setIsolate: (isolate) => set({ isolate }),
+  setHexWidget: (patch) =>
+    set((s) => ({ hexWidget: { ...s.hexWidget, ...patch } })),
 }));
