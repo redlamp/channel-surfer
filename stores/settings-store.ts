@@ -69,7 +69,7 @@ export const useSettingsStore = create<SettingsState>()(
       rgbFloat: false,
       labs: false,
       showColorHexagon: false,
-      colorMath: "linear",
+      colorMath: "auto",
       setHighlightMode: (highlightMode) => set({ highlightMode }),
       setRgbColorize: (rgbColorize) => set({ rgbColorize }),
       setColorModel: (colorModel) => set({ colorModel }),
@@ -86,9 +86,10 @@ export const useSettingsStore = create<SettingsState>()(
       // "bands" hue-map style became the animated "crawl". v3: twilight
       // won the style bake-off and becomes the default once for everyone;
       // the other styles live behind the Labs flag. v4: black-to-color
-      // tint becomes the default once.
+      // tint becomes the default once. v5: gamma follows the image by
+      // default (colorMath "auto").
       // (New fields are additive — zustand merges defaults in.)
-      version: 4,
+      version: 5,
       migrate: (persisted, version) => {
         const state = persisted as Omit<
           Partial<SettingsState>,
@@ -99,6 +100,7 @@ export const useSettingsStore = create<SettingsState>()(
           state.hueMapStyle = "crawl";
         if (version <= 2) state.hueMapStyle = "twilight";
         if (version <= 3) state.rgbColorize = true;
+        if (version <= 4) state.colorMath = "auto";
         return state as SettingsState;
       },
     },

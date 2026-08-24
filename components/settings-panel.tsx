@@ -211,7 +211,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
             setShowColorSteps(false);
             setRgbFloat(false);
             setShowColorHexagon(false);
-            setColorMath("linear");
+            setColorMath("auto");
           }}
         >
           Reset to defaults
