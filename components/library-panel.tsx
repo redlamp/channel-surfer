@@ -1,15 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef } from "react";
 import { ImageUp, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { useSourceStore, type MediaItem } from "@/stores/source-store";
-import {
-  formatBytes,
-  probeImageDetails,
-  type ImageDetails,
-} from "@/lib/image-details";
+import { formatBytes } from "@/lib/image-details";
 import { cn } from "@/lib/utils";
 
 function LibraryRow({
@@ -96,26 +92,9 @@ function SelectionDetails() {
     (items.find((i) => i.id === currentId) ??
       demoItems.find((d) => d.id === currentId))?.blob ?? null;
   const size = blob?.size ?? null;
-
-  // Details arrive async; tagging them with their id lets render discard
-  // stale results instead of clearing state synchronously in the effect.
-  const [probed, setProbed] = useState<{
-    id: string;
-    details: ImageDetails;
-  } | null>(null);
-
-  useEffect(() => {
-    if (!blob) return;
-    let cancelled = false;
-    void probeImageDetails(blob).then((details) => {
-      if (!cancelled) setProbed({ id: currentId, details });
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [blob, currentId]);
-
-  const details = probed?.id === currentId ? probed.details : null;
+  // The store probes on every selection change (auto gamma needs it too),
+  // so this panel just reads the result instead of parsing again.
+  const details = useSourceStore((s) => s.currentDetails);
 
   const megapixels = ((width * height) / 1_000_000).toFixed(
     width * height >= 10_000_000 ? 0 : 1,

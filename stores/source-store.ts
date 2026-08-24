@@ -1,6 +1,7 @@
 "use client";
 
 import { create } from "zustand";
+import { probeImageDetails, type ImageDetails } from "@/lib/image-details";
 import {
   idbDeleteItem,
   idbGetAllItems,
@@ -43,6 +44,10 @@ interface SourceState {
   demoItems: MediaItem[];
   /** Selected item id — a library id or a demo id. */
   currentId: string;
+  /** Header-sniffed details for the current selection, probed on every
+   * selection change so "auto" color math and the library panel share
+   * one lookup. Null until the probe lands. */
+  currentDetails: ImageDetails | null;
   /** Convenience mirrors of the current selection for the canvas. */
   url: string | null;
   width: number;
@@ -89,7 +94,26 @@ function selectionFields(src: MediaItem | null, isDemo: boolean) {
     height: src?.height ?? 1,
     name: src?.name ?? "",
     isDemo,
+    // Cleared here and refilled by probeDetails once the header parse
+    // lands, so stale details never describe the new selection.
+    currentDetails: null,
   };
+}
+
+/** Header-parse the selection in the background; ignore a result that
+ * arrives after the user moved on. */
+function probeDetails(
+  item: MediaItem | null,
+  set: (partial: { currentDetails: ImageDetails }) => void,
+  get: () => { currentId: string },
+) {
+  if (!item) return;
+  const id = item.id;
+  void probeImageDetails(item.blob)
+    .then((details) => {
+      if (get().currentId === id) set({ currentDetails: details });
+    })
+    .catch(() => {});
 }
 
 const demoItemCache = new Map<string, MediaItem>();
@@ -132,6 +156,7 @@ const onIdle = (fn: () => void) => {
 export const useSourceStore = create<SourceState>((set, get) => ({
   items: [],
   demoItems: [],
+  currentDetails: null,
   currentId: DEMO_ID,
   url: null,
   width: 1,
@@ -164,6 +189,7 @@ export const useSourceStore = create<SourceState>((set, get) => ({
     const item = savedId ? (items.find((i) => i.id === savedId) ?? null) : null;
     if (item) {
       set({ items, currentId: item.id, ...selectionFields(item, false) });
+      probeDetails(item, set, get);
     } else {
       set({ items });
     }
@@ -182,6 +208,7 @@ export const useSourceStore = create<SourceState>((set, get) => ({
           currentId: first.id,
           ...selectionFields(first, true),
         });
+        probeDetails(first, set, get);
       } catch {
         set({ error: "Couldn't load the demo images." });
       }
@@ -200,6 +227,7 @@ export const useSourceStore = create<SourceState>((set, get) => ({
               }
             : { demoItems: demos },
         );
+        if (demoSel) probeDetails(demoSel, set, get);
       });
     });
   },
@@ -235,6 +263,7 @@ export const useSourceStore = create<SourceState>((set, get) => ({
         error: failed,
         ...selectionFields(current, false),
       });
+      probeDetails(current, set, get);
     } else if (failed) {
       set({ error: failed });
     }
@@ -249,6 +278,7 @@ export const useSourceStore = create<SourceState>((set, get) => ({
     // Demo ids persist too, so a selected demo survives reloads.
     void idbSetCurrentId(id).catch(() => {});
     set({ currentId: id, ...selectionFields(src, item === null) });
+    probeDetails(src, set, get);
   },
 
   remove: async (id) => {
@@ -267,6 +297,7 @@ export const useSourceStore = create<SourceState>((set, get) => ({
         currentId: next?.id ?? DEMO_ID,
         ...selectionFields(next, !nextIsItem),
       });
+      probeDetails(next, set, get);
     } else {
       set({ items: remaining });
     }

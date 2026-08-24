@@ -8,6 +8,16 @@ import { persist } from "zustand/middleware";
 export type HighlightMode = "off" | "tile" | "all";
 /** Color model for the saturation/brightness tiles and readouts. */
 export type ColorModel = "hsb" | "hsl";
+/**
+ * Space the tile transforms are computed in.
+ *
+ * There was an "auto" mode that followed the image's declared gamma;
+ * it was dropped because real files effectively never declare linear
+ * (only a PNG with a gAMA 1.0 chunk and no sRGB/ICC tag would), so it
+ * never changed state and the control read as broken.
+ */
+export type ColorMath = "linear" | "srgb";
+
 /** Hue-map rendering style (see wiki/research/hue-direction-encoding.md). */
 export type HueMapStyle = "warmcool" | "glow" | "twilight" | "diamond" | "crawl";
 
@@ -25,9 +35,10 @@ interface SettingsState {
   labs: boolean;
   /** Show the color-taylor Hexagon (HSB wheel) below the canvas. */
   showColorHexagon: boolean;
-  /** Tile math space: linear light (the Gigi original) or sRGB values
-   * (matches how the readouts and most tools compute HSB). */
-  colorMath: "linear" | "srgb";
+  /** Tile math space: linear light (the Gigi original), sRGB values
+   * (matches how the readouts and most tools compute HSB), or auto —
+   * follow whatever the loaded image declares. */
+  colorMath: ColorMath;
   setHighlightMode: (mode: HighlightMode) => void;
   setRgbColorize: (on: boolean) => void;
   setColorModel: (model: ColorModel) => void;
@@ -36,7 +47,7 @@ interface SettingsState {
   setRgbFloat: (on: boolean) => void;
   setLabs: (on: boolean) => void;
   setShowColorHexagon: (on: boolean) => void;
-  setColorMath: (space: "linear" | "srgb") => void;
+  setColorMath: (space: ColorMath) => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -50,7 +61,7 @@ export const useSettingsStore = create<SettingsState>()(
       rgbFloat: false,
       labs: false,
       showColorHexagon: false,
-      colorMath: "linear",
+      colorMath: "srgb",
       setHighlightMode: (highlightMode) => set({ highlightMode }),
       setRgbColorize: (rgbColorize) => set({ rgbColorize }),
       setColorModel: (colorModel) => set({ colorModel }),
@@ -67,9 +78,11 @@ export const useSettingsStore = create<SettingsState>()(
       // "bands" hue-map style became the animated "crawl". v3: twilight
       // won the style bake-off and becomes the default once for everyone;
       // the other styles live behind the Labs flag. v4: black-to-color
-      // tint becomes the default once.
+      // tint becomes the default once. v5: gamma followed the image
+      // ("auto"). v6: auto is gone — those settings move to sRGB, now
+      // the default.
       // (New fields are additive — zustand merges defaults in.)
-      version: 4,
+      version: 6,
       migrate: (persisted, version) => {
         const state = persisted as Omit<
           Partial<SettingsState>,
@@ -80,6 +93,7 @@ export const useSettingsStore = create<SettingsState>()(
           state.hueMapStyle = "crawl";
         if (version <= 2) state.hueMapStyle = "twilight";
         if (version <= 3) state.rgbColorize = true;
+        if (version <= 5) state.colorMath = "srgb";
         return state as SettingsState;
       },
     },

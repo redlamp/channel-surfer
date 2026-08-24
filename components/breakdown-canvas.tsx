@@ -312,7 +312,17 @@ function BreakdownScene({
       mat.uniforms.uHoverTile.value = hoverTileRef.current ?? -1;
       const settings = useSettingsStore.getState();
       mat.uniforms.uHueMapStyle.value = HUE_STYLE_INDEX[settings.hueMapStyle];
-      mat.uniforms.uSrgbMath.value = settings.colorMath === "srgb" ? 1 : 0;
+      // Linear <-> sRGB cross-fade, same easing as the model swap.
+      // "auto" resolves against whatever the image declares.
+      const mathCur = mat.uniforms.uSrgbMath.value as number;
+      const mathGoal = settings.colorMath === "srgb" ? 1 : 0;
+      if (Math.abs(mathGoal - mathCur) > 0.002) {
+        const k = 1 - Math.exp(-10 * dt);
+        mat.uniforms.uSrgbMath.value = mathCur + (mathGoal - mathCur) * k;
+        active = true;
+      } else if (mathCur !== mathGoal) {
+        mat.uniforms.uSrgbMath.value = mathGoal;
+      }
 
       // HSB <-> HSL cross-fade: ease uColorModel toward the setting.
       const modelCur = mat.uniforms.uColorModel.value as number;
@@ -880,10 +890,13 @@ function BreakdownScene({
   );
 }
 
+// Tiles 1 and 2 both push saturation to full; what separates them is
+// whether brightness survives — shaded keeps it, flat discards it. The
+// old "mid/max saturation" names described a difference that isn't there.
 const TILE_NAMES = [
   "Source",
-  "Hue · mid saturation",
-  "Hue · max saturation",
+  "Hue · shaded",
+  "Hue · flat",
   "Hue map",
   "Saturation",
   "Brightness",
