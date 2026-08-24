@@ -916,6 +916,12 @@ export function BreakdownCanvas() {
           enableDamping={false}
           minZoom={40}
           maxZoom={20000}
+          // Touch: one finger stays free for color sampling (pointer
+          // events reach the mesh); two fingers pan and pinch-zoom.
+          touches={{
+            ONE: -1 as unknown as THREE.TOUCH,
+            TWO: THREE.TOUCH.DOLLY_PAN,
+          }}
         />
       </Canvas>
 

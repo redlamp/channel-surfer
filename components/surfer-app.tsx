@@ -80,12 +80,12 @@ export function SurferApp() {
         handleFiles(e.dataTransfer.files);
       }}
     >
-      {/* Crowding collapse order: subtitle hides first (<lg), then the
-          title takes its own row (<md) and the cluster reflows to
-          pickers / buttons / hexagon (<sm splits pickers, <480 splits
-          buttons, leaving the hexagon last). */}
+      {/* Crowding: subtitle hides first (<lg). Below md the header goes
+          compact-mobile: logo + icon-only buttons on one row, pickers on
+          the next, and the hexagon floats over the display area instead
+          of living in the header. */}
       <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border px-4 py-3 md:px-6">
-        <div className="min-w-0 shrink-0 max-md:basis-full">
+        <div className="min-w-0 shrink-0">
           <h1 className="font-mono text-xl font-semibold tracking-tight">
             Channel Surfer <span aria-hidden>🏄🌈</span>
           </h1>
@@ -93,13 +93,13 @@ export function SurferApp() {
             How RGB and HSB channels build an image
           </p>
         </div>
-        <div className="ml-auto shrink-0 max-md:order-3 max-md:ml-0">
+        <div className="ml-auto shrink-0 max-md:hidden">
           <HexagonMini height={81} />
         </div>
-        <div className="min-w-0 max-md:order-1 max-sm:basis-full">
+        <div className="min-w-0 max-md:order-2 max-md:basis-full">
           <ColorReadout />
         </div>
-        <div className="flex shrink-0 items-center gap-2 max-md:order-2 max-[480px]:basis-full">
+        <div className="flex shrink-0 items-center gap-2 max-md:order-1 max-md:ml-auto">
           <Button
             variant="ghost"
             title="Export breakdown as PNG"
@@ -116,17 +116,19 @@ export function SurferApp() {
                 URL.revokeObjectURL(a.href);
               });
             }}
+            aria-label="Export breakdown as PNG"
           >
             <Download aria-hidden />
-            Export
+            <span className="max-md:hidden">Export</span>
           </Button>
           <Button
             variant="ghost"
+            aria-label="Media Library"
             aria-pressed={libraryOpen}
             onClick={() => setLibraryOpen((v) => !v)}
           >
             <LibraryBig aria-hidden />
-            Media Library
+            <span className="max-md:hidden">Media Library</span>
           </Button>
           <Button
             variant="ghost"
@@ -151,6 +153,11 @@ export function SurferApp() {
         {settingsOpen && (
           <SettingsPanel onClose={() => setSettingsOpen(false)} />
         )}
+        {/* Mobile: the hexagon floats over the display area so the
+            header stays compact. */}
+        <div className="pointer-events-none absolute right-5 top-5 z-10 rounded-lg border border-border bg-popover/85 p-1 shadow-[var(--shadow-md)] md:hidden">
+          <HexagonMini height={64} />
+        </div>
         {dragging && (
           <div className="pointer-events-none absolute inset-2 z-10 flex items-center justify-center rounded-lg border-2 border-dashed border-primary bg-background/80">
             <p className="text-lg font-medium">Drop images to surf them</p>
