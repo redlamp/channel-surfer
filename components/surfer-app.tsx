@@ -134,8 +134,10 @@ export function SurferApp() {
             <Download aria-hidden />
             <span className="max-xl:hidden">Export</span>
           </Button>
+          {/* An open panel keeps its button lit, so the header shows
+              which surfaces are on screen. */}
           <Button
-            variant="ghost"
+            variant={libraryOpen ? "secondary" : "ghost"}
             aria-label="Media Library"
             aria-pressed={libraryOpen}
             onClick={() => setLibraryOpen((v) => !v)}
@@ -144,7 +146,7 @@ export function SurferApp() {
             <span className="max-xl:hidden">Media Library</span>
           </Button>
           <Button
-            variant="ghost"
+            variant={settingsOpen ? "secondary" : "ghost"}
             size="icon"
             aria-label="Settings"
             aria-pressed={settingsOpen}
@@ -162,7 +164,7 @@ export function SurferApp() {
           </div>
           <ColorSteps />
         </div>
-        {libraryOpen && <LibraryPanel />}
+        {libraryOpen && <LibraryPanel onClose={() => setLibraryOpen(false)} />}
         {settingsOpen && (
           <SettingsPanel onClose={() => setSettingsOpen(false)} />
         )}

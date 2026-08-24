@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ImageUp, Trash2 } from "lucide-react";
+import { ImageUp, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { useSourceStore, type MediaItem } from "@/stores/source-store";
@@ -155,7 +155,7 @@ function SelectionDetails() {
 
 /** Right-side library: every image dropped into the app, plus the demo,
  * with header-parsed details for the current selection. */
-export function LibraryPanel() {
+export function LibraryPanel({ onClose }: { onClose: () => void }) {
   const items = useSourceStore((s) => s.items);
   const demoItems = useSourceStore((s) => s.demoItems);
   const currentId = useSourceStore((s) => s.currentId);
@@ -166,11 +166,21 @@ export function LibraryPanel() {
 
   return (
     <aside className="flex w-72 shrink-0 flex-col overflow-hidden rounded-md border border-border bg-card shadow-[var(--shadow-sm)]">
-      <div className="flex items-baseline justify-between border-b border-border px-3 py-2">
+      <div className="flex items-center justify-between border-b border-border px-3 py-2">
         <h2 className="text-base font-semibold">Media Library</h2>
-        <span className="font-mono text-base text-muted-foreground">
-          {items.length} {items.length === 1 ? "image" : "images"}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-base text-muted-foreground">
+            {items.length} {items.length === 1 ? "image" : "images"}
+          </span>
+          <button
+            type="button"
+            aria-label="Close media library"
+            className="cursor-pointer select-none rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+            onClick={onClose}
+          >
+            <X className="size-4" />
+          </button>
+        </div>
       </div>
 
       <div className="border-b border-border p-1.5">
