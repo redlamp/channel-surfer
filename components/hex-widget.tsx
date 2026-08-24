@@ -118,10 +118,13 @@ export function HexDock() {
 
   if (w.mode !== "docked") {
     if (!dragging) return null;
+    // self-stretch: the slot adopts the header's current content height
+    // instead of dictating it, so the drop highlight never makes the
+    // header jump while dragging.
     return (
       <div
-        className="shrink-0 rounded-lg border-2 border-dashed border-ring bg-muted/40 max-xl:hidden"
-        style={{ width: SIZE_A + 8, height: SIZE_A + 8 }}
+        className="shrink-0 self-stretch rounded-lg border-2 border-dashed border-ring bg-muted/40 max-xl:hidden"
+        style={{ width: SIZE_A + 8 }}
         aria-hidden
       />
     );
