@@ -3,44 +3,13 @@
 import { FlaskConical, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Segmented } from "@/components/ui/segmented";
 import {
   useSettingsStore,
   type ColorModel,
   type HighlightMode,
   type HueMapStyle,
 } from "@/stores/settings-store";
-import { cn } from "@/lib/utils";
-
-function Segmented<T extends string>({
-  value,
-  options,
-  onChange,
-}: {
-  value: T;
-  options: { value: T; label: string }[];
-  onChange: (value: T) => void;
-}) {
-  return (
-    <div className="flex flex-wrap rounded-lg border border-border bg-surface-inset p-0.5">
-      {options.map((o) => (
-        <button
-          key={o.value}
-          type="button"
-          aria-pressed={value === o.value}
-          onClick={() => onChange(o.value)}
-          className={cn(
-            "flex-1 cursor-pointer rounded-md px-2.5 py-1 text-base whitespace-nowrap transition-colors",
-            value === o.value
-              ? "bg-primary text-primary-foreground shadow-[var(--shadow-sm)]"
-              : "text-muted-foreground hover:text-foreground",
-          )}
-        >
-          {o.label}
-        </button>
-      ))}
-    </div>
-  );
-}
 
 const HIGHLIGHT_OPTIONS: { value: HighlightMode; label: string }[] = [
   { value: "off", label: "Off" },
