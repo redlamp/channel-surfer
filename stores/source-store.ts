@@ -13,11 +13,13 @@ import {
 
 const BASE = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 
-/** Built-in demo images, shipped in public/demo/. First is the default. */
+/** Built-in demo images, shipped in public/demo/ (rainbows are lossless
+ * WebP — pixel-identical to the PNG originals, ~38% smaller). First is
+ * the default. */
 const DEMO_DEFS = [
   { id: "demo", file: "smpte-bars.png", name: "SMPTE bars" },
-  { id: "demo-linear-rainbow", file: "linear-rainbow.png", name: "Linear Rainbow" },
-  { id: "demo-radial-rainbow", file: "radial-rainbow.png", name: "Radial Rainbow" },
+  { id: "demo-linear-rainbow", file: "linear-rainbow.webp", name: "Linear Rainbow" },
+  { id: "demo-radial-rainbow", file: "radial-rainbow.webp", name: "Radial Rainbow" },
 ];
 
 /** Id of the primary demo (the app's ultimate fallback). */
@@ -90,28 +92,42 @@ function selectionFields(src: MediaItem | null, isDemo: boolean) {
   };
 }
 
-let demoCache: MediaItem[] | null = null;
-async function fetchDemos(): Promise<MediaItem[]> {
-  if (demoCache) return demoCache;
-  demoCache = await Promise.all(
-    DEMO_DEFS.map(async (d) => {
-      const blob = await fetch(encodeURI(`${BASE}/demo/${d.file}`)).then((r) =>
-        r.blob(),
-      );
-      const { width, height } = await probeImage(blob);
-      return {
-        id: d.id,
-        name: `${d.name} (demo)`,
-        width,
-        height,
-        addedAt: 0,
-        url: URL.createObjectURL(blob),
-        blob,
-      };
-    }),
-  );
-  return demoCache;
+const demoItemCache = new Map<string, MediaItem>();
+async function loadDemoDef(d: (typeof DEMO_DEFS)[number]): Promise<MediaItem> {
+  const cached = demoItemCache.get(d.id);
+  if (cached) return cached;
+  const res = await fetch(encodeURI(`${BASE}/demo/${d.file}`));
+  if (!res.ok) throw new Error(`demo fetch ${res.status}`);
+  const blob = await res.blob();
+  const { width, height } = await probeImage(blob);
+  const item = {
+    id: d.id,
+    name: `${d.name} (demo)`,
+    width,
+    height,
+    addedAt: 0,
+    url: URL.createObjectURL(blob),
+    blob,
+  };
+  demoItemCache.set(d.id, item);
+  return item;
 }
+
+/** All demos, in DEMO_DEFS order, skipping any that failed to load. */
+async function loadAllDemos(): Promise<MediaItem[]> {
+  const settled = await Promise.allSettled(DEMO_DEFS.map(loadDemoDef));
+  return settled
+    .filter(
+      (s): s is PromiseFulfilledResult<MediaItem> => s.status === "fulfilled",
+    )
+    .map((s) => s.value);
+}
+
+const onIdle = (fn: () => void) => {
+  if (typeof requestIdleCallback === "function")
+    requestIdleCallback(fn, { timeout: 2000 });
+  else setTimeout(fn, 1200);
+};
 
 export const useSourceStore = create<SourceState>((set, get) => ({
   items: [],
@@ -152,28 +168,40 @@ export const useSourceStore = create<SourceState>((set, get) => ({
       set({ items });
     }
 
-    // Demos arrive in the background; a fetch failure leaves a stored
-    // library fully usable instead of wedging the loading state.
-    try {
-      const demos = await fetchDemos();
-      const demoSel =
-        !item && !get().url
-          ? ((savedId ? demos.find((d) => d.id === savedId) : null) ??
-            demos[0])
-          : null;
-      set(
-        demoSel
-          ? {
-              demoItems: demos,
-              currentId: demoSel.id,
-              ...selectionFields(demoSel, true),
-            }
-          : { demoItems: demos },
-      );
-    } catch {
-      if (!get().url)
+    // Staged demo loading: only when a demo is needed as the immediate
+    // fallback does one (the saved/default) fetch eagerly — the rest
+    // wait for idle so they never compete with the startup path.
+    const needFallback = !item && !get().url;
+    if (needFallback) {
+      const def =
+        DEMO_DEFS.find((d) => d.id === savedId) ?? DEMO_DEFS[0];
+      try {
+        const first = await loadDemoDef(def);
+        set({
+          demoItems: [first],
+          currentId: first.id,
+          ...selectionFields(first, true),
+        });
+      } catch {
         set({ error: "Couldn't load the demo images." });
+      }
     }
+    onIdle(() => {
+      void loadAllDemos().then((demos) => {
+        if (demos.length === 0) return;
+        const st = get();
+        const demoSel = !st.url ? demos[0] : null;
+        set(
+          demoSel
+            ? {
+                demoItems: demos,
+                currentId: demoSel.id,
+                ...selectionFields(demoSel, true),
+              }
+            : { demoItems: demos },
+        );
+      });
+    });
   },
 
   loadFiles: async (files) => {
