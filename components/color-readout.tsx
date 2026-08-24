@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { Circle } from "lucide-react";
-import { HexagonMini } from "@/components/color-hexagon";
 import { rgbToHex, rgbToHsb, rgbToHsl } from "@/lib/color";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useUiStore, type SampledColor } from "@/stores/ui-store";
@@ -157,20 +156,17 @@ export function ColorReadout() {
   const pinnedColor = useUiStore((s) => s.pinnedColor);
 
   return (
-    <div className="flex items-center justify-end gap-3">
-      <HexagonMini height={81} />
-      <div className="flex flex-col items-end gap-0.5">
-        <ReadoutRow
-          sample={pinnedColor}
-          icon={<Circle className="size-4" aria-hidden />}
-          title="Pinned color"
-        />
-        <ReadoutRow
-          sample={hoverColor}
-          icon={<ReticleIcon className="size-4" />}
-          title="Hovered color"
-        />
-      </div>
+    <div className="flex flex-col items-end gap-0.5">
+      <ReadoutRow
+        sample={pinnedColor}
+        icon={<Circle className="size-4" aria-hidden />}
+        title="Pinned color"
+      />
+      <ReadoutRow
+        sample={hoverColor}
+        icon={<ReticleIcon className="size-4" />}
+        title="Hovered color"
+      />
     </div>
   );
 }

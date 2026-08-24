@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Download, LibraryBig, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BreakdownCanvas } from "@/components/breakdown-canvas";
+import { HexagonMini } from "@/components/color-hexagon";
 import { ColorReadout } from "@/components/color-readout";
 import { ColorSteps } from "@/components/color-steps";
 import { LibraryPanel } from "@/components/library-panel";
@@ -79,19 +80,26 @@ export function SurferApp() {
         handleFiles(e.dataTransfer.files);
       }}
     >
-      <header className="flex items-center justify-between gap-4 border-b border-border px-4 py-3 md:px-6">
-        <div className="shrink-0">
+      {/* Crowding collapse order: subtitle hides first (<lg), then the
+          title takes its own row (<md) and the cluster reflows to
+          pickers / buttons / hexagon (<sm splits pickers, <480 splits
+          buttons, leaving the hexagon last). */}
+      <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border px-4 py-3 md:px-6">
+        <div className="min-w-0 shrink-0 max-md:basis-full">
           <h1 className="font-mono text-xl font-semibold tracking-tight">
             Channel Surfer <span aria-hidden>🏄🌈</span>
           </h1>
-          <p className="text-base text-muted-foreground">
+          <p className="text-base text-muted-foreground max-lg:hidden">
             How RGB and HSB channels build an image
           </p>
         </div>
-        <div className="min-w-0 flex-1">
+        <div className="ml-auto shrink-0 max-md:order-3 max-md:ml-0">
+          <HexagonMini height={81} />
+        </div>
+        <div className="min-w-0 max-md:order-1 max-sm:basis-full">
           <ColorReadout />
         </div>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2 max-md:order-2 max-[480px]:basis-full">
           <Button
             variant="ghost"
             title="Export breakdown as PNG"
