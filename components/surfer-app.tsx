@@ -86,8 +86,20 @@ export function SurferApp() {
           display area instead of docked. */}
       <header className="group flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border px-4 py-3 xl:px-6">
         <div className="min-w-0 xl:flex-1 xl:basis-0">
-          <h1 className="font-mono text-xl font-semibold tracking-tight">
-            Channel Surfer <span aria-hidden>🏄🌈</span>
+          <h1 className="flex items-center gap-2 font-mono text-xl font-semibold tracking-tight">
+            {/* The app mark stands in for the emoji the title used to
+                carry. Square master + CSS radius, so the corner curve is
+                a style decision here rather than baked into the asset;
+                next/image is off under static export, hence a plain img. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/brand/icon-square.png`}
+              alt=""
+              width={28}
+              height={28}
+              className="size-7 shrink-0 rounded-[4px]"
+            />
+            Channel Surfer
           </h1>
           <p className="text-base text-muted-foreground max-[1440px]:hidden">
             How RGB and HSB channels build an image
@@ -122,8 +134,10 @@ export function SurferApp() {
             <Download aria-hidden />
             <span className="max-xl:hidden">Export</span>
           </Button>
+          {/* An open panel keeps its button lit, so the header shows
+              which surfaces are on screen. */}
           <Button
-            variant="ghost"
+            variant={libraryOpen ? "secondary" : "ghost"}
             aria-label="Media Library"
             aria-pressed={libraryOpen}
             onClick={() => setLibraryOpen((v) => !v)}
@@ -132,7 +146,7 @@ export function SurferApp() {
             <span className="max-xl:hidden">Media Library</span>
           </Button>
           <Button
-            variant="ghost"
+            variant={settingsOpen ? "secondary" : "ghost"}
             size="icon"
             aria-label="Settings"
             aria-pressed={settingsOpen}
@@ -150,7 +164,7 @@ export function SurferApp() {
           </div>
           <ColorSteps />
         </div>
-        {libraryOpen && <LibraryPanel />}
+        {libraryOpen && <LibraryPanel onClose={() => setLibraryOpen(false)} />}
         {settingsOpen && (
           <SettingsPanel onClose={() => setSettingsOpen(false)} />
         )}
