@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { HexagonMini } from "@/components/color-hexagon";
 import { useUiStore } from "@/stores/ui-store";
+import { cn } from "@/lib/utils";
 
 /** Click-toggle sizes: the header size and double it. */
 const SIZE_A = 81;
@@ -117,16 +118,23 @@ export function HexDock() {
   const dragging = useUiStore((s) => s.hexDragging);
 
   if (w.mode !== "docked") {
-    if (!dragging) return null;
-    // self-stretch: the slot adopts the header's current content height
-    // instead of dictating it, so the drop highlight never makes the
-    // header jump while dragging.
+    // While detached, the slot stays as a square return target: click it
+    // (or drop the widget on the header) to re-dock. self-stretch +
+    // aspect-square keeps it from changing the header's height.
     return (
-      <div
-        className="shrink-0 self-stretch rounded-lg border-2 border-dashed border-ring bg-muted/40 max-xl:hidden"
-        style={{ width: SIZE_A + 8 }}
-        aria-hidden
-      />
+      <button
+        type="button"
+        aria-label="Return color hex to the header"
+        onClick={() => useUiStore.getState().setHexWidget({ mode: "docked" })}
+        className={cn(
+          "aspect-square shrink-0 cursor-pointer select-none self-stretch rounded-lg border-2 border-dashed p-1 text-center font-mono text-base leading-tight transition-colors max-xl:hidden",
+          dragging
+            ? "border-ring bg-muted/40 text-foreground"
+            : "border-border text-muted-foreground hover:border-ring hover:bg-muted/40 hover:text-foreground",
+        )}
+      >
+        return color hex
+      </button>
     );
   }
   return (
