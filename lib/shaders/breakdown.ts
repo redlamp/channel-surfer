@@ -130,14 +130,16 @@ vec3 imageSource(vec3 color) {
   return color;
 }
 
-/* Tile 1 — "Hue Mid": any saturation snaps to full. */
+/* Tile 1 — "Hue · shaded": saturation snaps to full, brightness is kept,
+   so the hue still carries the image's shading. */
 vec3 imageMaxSat(vec3 color) {
   vec3 hsv = rgb2hsv(color);
   hsv.y = hsv.y > 0.0 ? 1.0 : 0.0;
   return hsv2rgb(hsv);
 }
 
-/* Tile 2 — "Hue Max": full sat + full value; greys posterize to 3 stops. */
+/* Tile 2 — "Hue · flat": full saturation AND full value, so shading is
+   discarded and only pure hue remains; greys posterize to 3 stops. */
 vec3 imageMaxSatMaxVal(vec3 color) {
   vec3 hsv = rgb2hsv(color);
   if (hsv.y > 0.0) {
