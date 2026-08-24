@@ -150,6 +150,7 @@ function BreakdownScene({
   const pinHoverRef = useRef(false);
   const pointerPosRef = useRef<{ x: number; y: number } | null>(null);
   const hexCardPosRef = useRef<{ x: number; y: number } | null>(null);
+  const lastTapRef = useRef<{ t: number; x: number; y: number } | null>(null);
 
   // Hand the DOM shell a way to request frames (tint bar handlers).
   useEffect(() => {
@@ -613,29 +614,6 @@ function BreakdownScene({
     invalidate();
   };
 
-  // Single click pins (or unpins) the color sample. Held briefly so a
-  // double-click (framing) doesn't also move the pin.
-  const onClick = (e: ThreeEvent<MouseEvent>) => {
-    // Ignore drag-release "clicks" (delta = px between down and up).
-    if (!e.uv || e.delta > 4) return;
-    const { u, v } = tileFromUv(e.uv);
-    if (clickTimerRef.current !== null)
-      window.clearTimeout(clickTimerRef.current);
-    clickTimerRef.current = window.setTimeout(() => {
-      clickTimerRef.current = null;
-      if (pinDistPx(u, v) < 12) {
-        // Clicking on (or near) the existing pin clears it.
-        pinUvRef.current = null;
-        pinHoverRef.current = false;
-        onCursor("reticle");
-        useUiStore.getState().setPinnedColor(null);
-      } else {
-        setPinAt(u, v);
-      }
-      invalidate();
-    }, CLICK_DELAY_MS);
-  };
-
   const frameTile = useCallback(
     (tile: number, snap = false) => {
       const { size, camera, controls } = get();
@@ -689,6 +667,60 @@ function BreakdownScene({
       canvasBridge.refit = null;
     };
   }, [unframe]);
+
+  // Single click pins (or unpins) the color sample. Held briefly so a
+  // double-click (framing) doesn't also move the pin.
+  const onClick = (e: ThreeEvent<MouseEvent>) => {
+    // Ignore drag-release "clicks" (delta = px between down and up).
+    if (!e.uv || e.delta > 4) return;
+    const { tile, u, v } = tileFromUv(e.uv);
+
+    // Touch double-tap = frame the tile: the canvas has touch-action
+    // none, so the browser never synthesizes dblclick for taps.
+    if ((e.nativeEvent as PointerEvent).pointerType === "touch") {
+      const now = performance.now();
+      const x = e.nativeEvent.offsetX;
+      const y = e.nativeEvent.offsetY;
+      const last = lastTapRef.current;
+      lastTapRef.current = { t: now, x, y };
+      if (
+        last &&
+        now - last.t < 320 &&
+        Math.hypot(x - last.x, y - last.y) < 32
+      ) {
+        lastTapRef.current = null;
+        if (clickTimerRef.current !== null) {
+          window.clearTimeout(clickTimerRef.current);
+          clickTimerRef.current = null;
+        }
+        canvasBridge.meshDblAt = now;
+        if (zoomedTileRef.current === tile) unframe();
+        else frameTile(tile);
+        return;
+      }
+    }
+
+    if (clickTimerRef.current !== null)
+      window.clearTimeout(clickTimerRef.current);
+    // Touch pins wait out the double-tap window; mouse only the dblclick.
+    const pinDelay =
+      (e.nativeEvent as PointerEvent).pointerType === "touch"
+        ? 340
+        : CLICK_DELAY_MS;
+    clickTimerRef.current = window.setTimeout(() => {
+      clickTimerRef.current = null;
+      if (pinDistPx(u, v) < 12) {
+        // Clicking on (or near) the existing pin clears it.
+        pinUvRef.current = null;
+        pinHoverRef.current = false;
+        onCursor("reticle");
+        useUiStore.getState().setPinnedColor(null);
+      } else {
+        setPinAt(u, v);
+      }
+      invalidate();
+    }, pinDelay);
+  };
 
   const onDoubleClick = (e: ThreeEvent<MouseEvent>) => {
     canvasBridge.meshDblAt = performance.now();

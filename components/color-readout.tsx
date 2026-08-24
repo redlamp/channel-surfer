@@ -111,16 +111,27 @@ function ReadoutRow({
       }}
       className={cn(
         "flex cursor-pointer items-center gap-2 rounded-md px-2 py-0.5 font-mono text-base whitespace-pre transition-opacity hover:bg-muted",
-        has ? "opacity-100" : "pointer-events-none opacity-40",
+        has ? "opacity-100" : "pointer-events-none opacity-60",
       )}
     >
       <span className="text-muted-foreground">{icon}</span>
+      {/* Empty state keeps the swatch outlined and shows a dimmed "#",
+          so the space reads as a waiting slot rather than a gap. */}
       <span
-        className="size-4 shrink-0 rounded-sm border border-border"
+        className={cn(
+          "size-4 shrink-0 rounded-sm border",
+          has ? "border-border" : "border-muted-foreground/60",
+        )}
         style={{ backgroundColor: has ? hex : "transparent" }}
       />
       <span className="w-[7ch] text-left">
-        {copied ? "Copied!" : has ? hex : ""}
+        {copied ? (
+          "Copied!"
+        ) : has ? (
+          hex
+        ) : (
+          <span className="text-muted-foreground/70">#</span>
+        )}
       </span>
       <span className="font-bold">RGB</span>
       <ValueCell text={fmt(r)} frac={has ? r / 255 : 0} widthCh={rgbWidth} bar="r" />
