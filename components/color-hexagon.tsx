@@ -1,8 +1,56 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { rgbToHex, rgbToHsb } from "@/lib/color";
+import { useSettingsStore } from "@/stores/settings-store";
 import { useUiStore, type SampledColor } from "@/stores/ui-store";
+
+/** Tile index of the hue map in the 3x3 grid. */
+const HUE_MAP_TILE = 3;
+
+/* Twilight ramp constants, matching the shader's linear-light values. */
+const TW_WHITE = [0.92, 0.92, 0.92];
+const TW_BLUE = [0.32, 0.44, 0.76];
+const TW_RED = [0.76, 0.36, 0.31];
+const TW_DARK = [0.11, 0.07, 0.15];
+
+const smoothstep = (a: number, b: number, x: number) => {
+  const t = Math.min(Math.max((x - a) / (b - a), 0), 1);
+  return t * t * (3 - 2 * t);
+};
+const mix3 = (a: number[], b: number[], t: number) =>
+  a.map((v, i) => v + (b[i] - v) * t);
+const linToSrgb255 = (v: number) =>
+  Math.round(
+    (v <= 0.0031308 ? v * 12.92 : 1.055 * Math.pow(v, 1 / 2.4) - 0.055) * 255,
+  );
+
+/** Conic gradient replicating the shader's twilight hue map around the
+ * ring: white at the target hue's angle, blue arm CCW, red arm CW, one
+ * dark at the antipode. CSS conic runs clockwise from the top, our hue
+ * angles run counter-clockwise from the right — hence 90 - deg. */
+function twilightRingGradient(targetHue01: number) {
+  const stops: string[] = [];
+  const N = 48;
+  for (let i = 0; i <= N; i++) {
+    const cssDeg = (i / N) * 360;
+    const hue01 = (((90 - cssDeg) % 360) + 360) % 360 / 360;
+    let sd = (hue01 - targetHue01 + 0.5) % 1;
+    if (sd < 0) sd += 1;
+    sd -= 0.5;
+    const u = Math.min(Math.abs(sd) * 2, 1);
+    const arm = sd < 0 ? TW_RED : TW_BLUE;
+    const lin = mix3(
+      mix3(TW_WHITE, arm, smoothstep(0, 0.5, u)),
+      TW_DARK,
+      smoothstep(0.5, 1, u),
+    );
+    stops.push(
+      `rgb(${linToSrgb255(lin[0])},${linToSrgb255(lin[1])},${linToSrgb255(lin[2])}) ${cssDeg.toFixed(1)}deg`,
+    );
+  }
+  return `conic-gradient(from 0deg, ${stops.join(",")})`;
+}
 
 /** Header-sized hexagon: the full HexagonInner (labels off) scaled down
  * to a given height, cropped to the wheel plus enough margin for the
@@ -185,7 +233,27 @@ function StemChain({
 export function HexagonInner({ labels = true }: { labels?: boolean }) {
   const hoverColor = useUiStore((s) => s.hoverColor);
   const pinnedColor = useUiStore((s) => s.pinnedColor);
+  const hoverTile = useUiStore((s) => s.hoverTile);
+  const highlightMode = useSettingsStore((s) => s.highlightMode);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  // While hovering the hue tile, the ring becomes a twilight legend:
+  // white anchored at the current target hue (the hovered pixel's hue
+  // when picking is active, 180 deg otherwise).
+  const onHueTile = hoverTile === HUE_MAP_TILE;
+  const picking =
+    highlightMode === "all" || (highlightMode === "tile" && onHueTile);
+  let ringTarget = 0.5;
+  if (picking && hoverColor) {
+    const { h, s } = rgbToHsb(hoverColor.r, hoverColor.g, hoverColor.b);
+    if (s > 0) ringTarget = h / 360;
+  }
+  // Quantize so the gradient string is stable while sweeping one hue area.
+  const ringTargetQ = Math.round(ringTarget * 180) / 180;
+  const ringGradient = useMemo(
+    () => (onHueTile ? twilightRingGradient(ringTargetQ) : null),
+    [onHueTile, ringTargetQ],
+  );
 
   // The wheel itself is static — rasterize once at 2x.
   useEffect(() => {
@@ -227,6 +295,21 @@ export function HexagonInner({ labels = true }: { labels?: boolean }) {
         className="absolute rounded-full border border-border"
         style={{ left: PAD, top: PAD, width: R * 2, height: R * 2 }}
       />
+      {ringGradient && (
+        <div
+          className="absolute rounded-full"
+          style={{
+            left: PAD - 3,
+            top: PAD - 3,
+            width: R * 2 + 6,
+            height: R * 2 + 6,
+            background: ringGradient,
+            mask: "radial-gradient(closest-side, transparent calc(100% - 6px), #000 calc(100% - 5px))",
+            WebkitMask:
+              "radial-gradient(closest-side, transparent calc(100% - 6px), #000 calc(100% - 5px))",
+          }}
+        />
+      )}
       <canvas
         ref={canvasRef}
         className="absolute"
