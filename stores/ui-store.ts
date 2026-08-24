@@ -35,6 +35,8 @@ interface UiState {
   };
   /** True while the hexagon widget is mid-drag (drop targets light up). */
   hexDragging: boolean;
+  /** True while a drag hovers the dock zone — releasing would re-dock. */
+  hexOverDock: boolean;
   /** Tile currently framed by focus mode, null when viewing the grid. */
   framedTile: number | null;
   /** Focus-mode isolation: hide the non-focused tiles while framed. */
@@ -47,6 +49,7 @@ interface UiState {
   setIsolate: (on: boolean) => void;
   setHexWidget: (patch: Partial<UiState["hexWidget"]>) => void;
   setHexDragging: (on: boolean) => void;
+  setHexOverDock: (on: boolean) => void;
 }
 
 /**
@@ -74,6 +77,7 @@ export const useUiStore = create<UiState>((set) => ({
   isolate: false,
   hexWidget: { mode: "docked", size: 81, x: 24, y: 90 },
   hexDragging: false,
+  hexOverDock: false,
   setHoverColor: (hoverColor) =>
     set(hoverColor ? { hoverColor, lastHoverColor: hoverColor } : { hoverColor }),
   setPinnedColor: (pinnedColor) => set({ pinnedColor }),
@@ -84,4 +88,5 @@ export const useUiStore = create<UiState>((set) => ({
   setHexWidget: (patch) =>
     set((s) => ({ hexWidget: { ...s.hexWidget, ...patch } })),
   setHexDragging: (hexDragging) => set({ hexDragging }),
+  setHexOverDock: (hexOverDock) => set({ hexOverDock }),
 }));

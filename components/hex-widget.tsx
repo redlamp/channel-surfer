@@ -40,6 +40,9 @@ function beginDrag(e: React.PointerEvent<HTMLElement>) {
       start.moved = true;
       s.setHexDragging(true);
     }
+    const overDock =
+      ev.clientY < DOCK_ZONE_PX && window.innerWidth >= 1280;
+    if (overDock !== s.hexOverDock) s.setHexOverDock(overDock);
     s.setHexWidget({
       mode: "floating",
       x: clamp(start.origX + dx, 4, window.innerWidth - s.hexWidget.size - 16),
@@ -51,6 +54,7 @@ function beginDrag(e: React.PointerEvent<HTMLElement>) {
     window.removeEventListener("pointerup", up);
     const s = useUiStore.getState();
     s.setHexDragging(false);
+    s.setHexOverDock(false);
     if (!start.moved) {
       // A plain tap/click toggles the preset sizes — floating only; the
       // docked widget stays at header size.
@@ -116,6 +120,7 @@ function ResizeGrip({ className }: { className?: string }) {
 export function HexDock() {
   const w = useUiStore((s) => s.hexWidget);
   const dragging = useUiStore((s) => s.hexDragging);
+  const overDock = useUiStore((s) => s.hexOverDock);
 
   if (w.mode !== "docked") {
     // While detached, the slot stays as a square return target: click it
@@ -131,9 +136,11 @@ export function HexDock() {
         style={{ width: SIZE_A + 8, height: SIZE_A + 8 }}
         className={cn(
           "flex shrink-0 cursor-pointer select-none items-center justify-center whitespace-normal rounded-lg border-2 border-dashed p-1 text-center font-mono text-base leading-tight transition-colors max-xl:hidden",
-          dragging
-            ? "border-ring bg-muted/40 text-foreground"
-            : "border-border text-muted-foreground hover:border-ring hover:bg-muted/40 hover:text-foreground",
+          dragging && overDock
+            ? "scale-105 border-solid border-ring bg-ring/25 text-foreground"
+            : dragging
+              ? "border-ring bg-muted/40 text-foreground"
+              : "border-border text-muted-foreground hover:border-ring hover:bg-muted/40 hover:text-foreground",
         )}
       >
         <span
@@ -161,6 +168,7 @@ export function HexDock() {
 /** The free-floating card: draggable anywhere, corner-resizable. */
 export function HexFloat() {
   const w = useUiStore((s) => s.hexWidget);
+  const dragging = useUiStore((s) => s.hexDragging);
 
   // Compact-layout screens have no header slot, so the widget must live
   // as a float there — tracked live via matchMedia, not just at mount,
@@ -196,7 +204,10 @@ export function HexFloat() {
   if (w.mode !== "floating") return null;
   return (
     <div
-      className="fixed z-50 cursor-grab touch-none select-none rounded-lg border border-border bg-popover/90 p-1.5 shadow-[var(--shadow-lg)] transition-colors hover:border-ring/70 hover:bg-popover active:cursor-grabbing"
+      className={cn(
+        "fixed z-50 cursor-grab touch-none select-none rounded-lg border border-border bg-popover/90 p-1.5 shadow-[var(--shadow-lg)] transition-[color,background-color,border-color,opacity] hover:border-ring/70 hover:bg-popover active:cursor-grabbing",
+        dragging && "opacity-60",
+      )}
       style={{ left: w.x, top: w.y }}
       title="Click to toggle size · drag to move"
       onPointerDown={beginDrag}
