@@ -119,15 +119,18 @@ export function HexDock() {
 
   if (w.mode !== "docked") {
     // While detached, the slot stays as a square return target: click it
-    // (or drop the widget on the header) to re-dock. self-stretch +
-    // aspect-square keeps it from changing the header's height.
+    // (or drop the widget on the header) to re-dock. It is fixed to the
+    // exact footprint the docked widget occupies (hex + padding), so
+    // docking and detaching never shift the header — and at that width
+    // the caption wraps to three short lines.
     return (
       <button
         type="button"
         aria-label="Return color hex to the header"
         onClick={() => useUiStore.getState().setHexWidget({ mode: "docked" })}
+        style={{ width: SIZE_A + 8, height: SIZE_A + 8 }}
         className={cn(
-          "flex aspect-square min-w-0 shrink-0 cursor-pointer select-none items-center justify-center self-stretch whitespace-normal rounded-lg border-2 border-dashed p-1 text-center font-mono text-base leading-tight break-words transition-colors max-xl:hidden",
+          "flex shrink-0 cursor-pointer select-none items-center justify-center whitespace-normal rounded-lg border-2 border-dashed p-1 text-center font-mono text-base leading-tight transition-colors max-xl:hidden",
           dragging
             ? "border-ring bg-muted/40 text-foreground"
             : "border-border text-muted-foreground hover:border-ring hover:bg-muted/40 hover:text-foreground",
