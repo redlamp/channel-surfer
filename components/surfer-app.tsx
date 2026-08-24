@@ -7,6 +7,7 @@ import { BreakdownCanvas } from "@/components/breakdown-canvas";
 import { ColorReadout } from "@/components/color-readout";
 import { HexDock, HexFloat } from "@/components/hex-widget";
 import { ColorSteps } from "@/components/color-steps";
+import { DisplayToolbar } from "@/components/display-toolbar";
 import { LibraryPanel } from "@/components/library-panel";
 import { SettingsPanel } from "@/components/settings-panel";
 import { useSourceStore } from "@/stores/source-store";
@@ -159,6 +160,7 @@ export function SurferApp() {
 
       <main className="relative flex min-h-0 flex-1 gap-4 p-4 md:p-6">
         <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
+          <DisplayToolbar />
           <div className="min-h-0 flex-1">
             <BreakdownCanvas />
           </div>
