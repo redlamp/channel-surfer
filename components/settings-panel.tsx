@@ -190,24 +190,29 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           </p>
         </div>
 
-        <div className="space-y-2">
-          <Label>Hexagon</Label>
-          <Segmented
-            value={showColorHexagon ? "show" : "hide"}
-            options={[
-              { value: "hide", label: "Hide" },
-              { value: "show", label: "Show" },
-            ]}
-            onChange={(v) => setShowColorHexagon(v === "show")}
-          />
-          <p className="text-base text-muted-foreground">
-            The color-taylor hexagon as a hover card that follows the
-            cursor, with RGB channel stems for the hovered color.
-          </p>
-        </div>
+        {labs && (
+          <div className="space-y-2">
+            <Label>
+              <FlaskConical className="size-4" aria-hidden /> Hexagon hover
+              card
+            </Label>
+            <Segmented
+              value={showColorHexagon ? "show" : "hide"}
+              options={[
+                { value: "hide", label: "Hide" },
+                { value: "show", label: "Show" },
+              ]}
+              onChange={(v) => setShowColorHexagon(v === "show")}
+            />
+            <p className="text-base text-muted-foreground">
+              The hexagon as a hover card that follows the cursor over the
+              tiles.
+            </p>
+          </div>
+        )}
 
         <div className="space-y-2">
-          <Label>Color steps</Label>
+          <Label>Equations</Label>
           <Segmented
             value={showColorSteps ? "show" : "hide"}
             options={[
@@ -229,7 +234,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           className="flex-1"
           onClick={() => {
             setHighlightMode("tile");
-            setRgbColorize(false);
+            setRgbColorize(true);
             setColorModel("hsb");
             setHueMapStyle("twilight");
             setShowColorSteps(false);

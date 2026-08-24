@@ -43,7 +43,7 @@ export const useSettingsStore = create<SettingsState>()(
   persist(
     (set) => ({
       highlightMode: "tile",
-      rgbColorize: false,
+      rgbColorize: true,
       colorModel: "hsb",
       hueMapStyle: "twilight",
       showColorSteps: false,
@@ -66,9 +66,10 @@ export const useSettingsStore = create<SettingsState>()(
       // v1: default highlightMode changed "all" -> "tile". v2: the static
       // "bands" hue-map style became the animated "crawl". v3: twilight
       // won the style bake-off and becomes the default once for everyone;
-      // the other styles live behind the Labs flag.
+      // the other styles live behind the Labs flag. v4: black-to-color
+      // tint becomes the default once.
       // (New fields are additive — zustand merges defaults in.)
-      version: 3,
+      version: 4,
       migrate: (persisted, version) => {
         const state = persisted as Omit<
           Partial<SettingsState>,
@@ -78,6 +79,7 @@ export const useSettingsStore = create<SettingsState>()(
         if (version <= 1 && state.hueMapStyle === "bands")
           state.hueMapStyle = "crawl";
         if (version <= 2) state.hueMapStyle = "twilight";
+        if (version <= 3) state.rgbColorize = true;
         return state as SettingsState;
       },
     },
