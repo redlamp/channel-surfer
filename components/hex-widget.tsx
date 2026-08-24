@@ -34,8 +34,11 @@ function beginDrag(e: React.PointerEvent<HTMLElement>) {
     const dx = ev.clientX - start.x;
     const dy = ev.clientY - start.y;
     if (!start.moved && Math.hypot(dx, dy) < 6) return;
-    start.moved = true;
     const s = useUiStore.getState();
+    if (!start.moved) {
+      start.moved = true;
+      s.setHexDragging(true);
+    }
     s.setHexWidget({
       mode: "floating",
       x: clamp(start.origX + dx, 4, window.innerWidth - s.hexWidget.size - 16),
@@ -46,6 +49,7 @@ function beginDrag(e: React.PointerEvent<HTMLElement>) {
     window.removeEventListener("pointermove", move);
     window.removeEventListener("pointerup", up);
     const s = useUiStore.getState();
+    s.setHexDragging(false);
     if (!start.moved) {
       // A plain tap/click toggles the preset sizes — floating only; the
       // docked widget stays at header size.
@@ -105,13 +109,26 @@ function ResizeGrip({ className }: { className?: string }) {
 }
 
 /** The header slot: renders the widget while docked (xl+ only), always
- * at the small header size — sizing is a floating-mode privilege. */
+ * at the small header size — sizing is a floating-mode privilege. While
+ * the widget is floating and mid-drag, the empty slot lights up as a
+ * drop target for re-docking. */
 export function HexDock() {
   const w = useUiStore((s) => s.hexWidget);
-  if (w.mode !== "docked") return null;
+  const dragging = useUiStore((s) => s.hexDragging);
+
+  if (w.mode !== "docked") {
+    if (!dragging) return null;
+    return (
+      <div
+        className="shrink-0 rounded-lg border-2 border-dashed border-ring bg-muted/40 max-xl:hidden"
+        style={{ width: SIZE_A + 8, height: SIZE_A + 8 }}
+        aria-hidden
+      />
+    );
+  }
   return (
     <div
-      className="shrink-0 cursor-grab touch-none select-none active:cursor-grabbing max-xl:hidden"
+      className="shrink-0 cursor-grab touch-none select-none rounded-lg p-1 transition-colors hover:bg-muted/70 active:cursor-grabbing max-xl:hidden"
       title="Drag to detach"
       onPointerDown={beginDrag}
     >
@@ -158,7 +175,7 @@ export function HexFloat() {
   if (w.mode !== "floating") return null;
   return (
     <div
-      className="fixed z-50 cursor-grab touch-none select-none rounded-lg border border-border bg-popover/90 p-1.5 shadow-[var(--shadow-lg)] active:cursor-grabbing"
+      className="fixed z-50 cursor-grab touch-none select-none rounded-lg border border-border bg-popover/90 p-1.5 shadow-[var(--shadow-lg)] transition-colors hover:border-ring/70 hover:bg-popover active:cursor-grabbing"
       style={{ left: w.x, top: w.y }}
       title="Click to toggle size · drag to move"
       onPointerDown={beginDrag}
