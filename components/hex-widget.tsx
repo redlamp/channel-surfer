@@ -16,13 +16,27 @@ const DOCK_ZONE_PX = 72;
 const clamp = (v: number, lo: number, hi: number) =>
   Math.min(Math.max(v, lo), hi);
 
+/** The dock exists at Tailwind's xl breakpoint. Matching it in rem (not
+ * a hard 1280px) keeps the JS checks agreeing with the CSS even when the
+ * browser's base font size isn't 16px. */
+const DESKTOP_MQ = "(min-width: 80rem)";
+const isDesktop = () => window.matchMedia(DESKTOP_MQ).matches;
+
+/** Clamp a floating position for a given size. */
+function clampPos(x: number, y: number, size: number) {
+  return {
+    x: clamp(x, 4, window.innerWidth - size - 16),
+    y: clamp(y, 4, window.innerHeight - size - 16),
+  };
+}
+
 /** The live return-slot element, for real drop-target hit testing. */
 let slotEl: HTMLElement | null = null;
 
 /** Is the pointer over the return slot (with a forgiving margin)? Falls
  * back to the old top-strip heuristic if the slot isn't mounted yet. */
 function pointerOverSlot(ev: PointerEvent) {
-  if (window.innerWidth < 1280) return false;
+  if (!isDesktop()) return false;
   if (slotEl) {
     const r = slotEl.getBoundingClientRect();
     const m = 12;
@@ -43,6 +57,7 @@ function pointerOverSlot(ev: PointerEvent) {
  */
 function beginDrag(e: React.PointerEvent<HTMLElement>) {
   if (e.button !== 0) return;
+  const pid = e.pointerId;
   const rect = e.currentTarget.getBoundingClientRect();
   const start = {
     x: e.clientX,
@@ -51,7 +66,16 @@ function beginDrag(e: React.PointerEvent<HTMLElement>) {
     origY: rect.top,
     moved: false,
   };
+  const teardown = () => {
+    window.removeEventListener("pointermove", move);
+    window.removeEventListener("pointerup", up);
+    window.removeEventListener("pointercancel", cancel);
+    const s = useUiStore.getState();
+    s.setHexDragging(false);
+    s.setHexOverDock(false);
+  };
   const move = (ev: PointerEvent) => {
+    if (ev.pointerId !== pid) return;
     const dx = ev.clientX - start.x;
     const dy = ev.clientY - start.y;
     if (!start.moved && Math.hypot(dx, dy) < 6) return;
@@ -64,52 +88,73 @@ function beginDrag(e: React.PointerEvent<HTMLElement>) {
     if (overDock !== s.hexOverDock) s.setHexOverDock(overDock);
     s.setHexWidget({
       mode: "floating",
-      x: clamp(start.origX + dx, 4, window.innerWidth - s.hexWidget.size - 16),
-      y: clamp(start.origY + dy, 4, window.innerHeight - s.hexWidget.size - 16),
+      ...clampPos(start.origX + dx, start.origY + dy, s.hexWidget.size),
     });
   };
-  const up = () => {
-    window.removeEventListener("pointermove", move);
-    window.removeEventListener("pointerup", up);
+  const up = (ev: PointerEvent) => {
+    if (ev.pointerId !== pid) return;
+    const wasOverDock = useUiStore.getState().hexOverDock;
+    teardown();
     const s = useUiStore.getState();
-    const wasOverDock = s.hexOverDock;
-    s.setHexDragging(false);
-    s.setHexOverDock(false);
     if (!start.moved) {
       // A plain tap/click toggles the preset sizes — floating only; the
-      // docked widget stays at header size.
-      if (s.hexWidget.mode === "floating")
+      // docked widget stays at header size. Re-clamp for the new size so
+      // growing near an edge can't push the card (or its grip) offscreen.
+      if (s.hexWidget.mode === "floating") {
+        const size =
+          s.hexWidget.size < (SIZE_A + SIZE_B) / 2 ? SIZE_B : SIZE_A;
         s.setHexWidget({
-          size: s.hexWidget.size < (SIZE_A + SIZE_B) / 2 ? SIZE_B : SIZE_A,
+          size,
+          ...clampPos(s.hexWidget.x, s.hexWidget.y, size),
         });
+      }
     } else if (s.hexWidget.mode === "floating" && wasOverDock) {
       // Releasing over the slot re-docks it.
       s.setHexWidget({ mode: "docked" });
     }
   };
+  const cancel = (ev: PointerEvent) => {
+    if (ev.pointerId !== pid) return;
+    teardown();
+  };
   window.addEventListener("pointermove", move);
   window.addEventListener("pointerup", up);
+  window.addEventListener("pointercancel", cancel);
   e.preventDefault();
 }
 
 function beginResize(e: React.PointerEvent<HTMLElement>) {
   e.stopPropagation();
   e.preventDefault();
+  const pid = e.pointerId;
   const s0 = useUiStore.getState().hexWidget;
   const start = { x: e.clientX, y: e.clientY, size: s0.size };
-  const move = (ev: PointerEvent) => {
-    const delta = Math.max(ev.clientX - start.x, ev.clientY - start.y);
-    const s = useUiStore.getState();
-    s.setHexWidget({
-      size: clamp(start.size + delta, MIN_SIZE, MAX_SIZE),
-    });
-  };
-  const up = () => {
+  const teardown = () => {
     window.removeEventListener("pointermove", move);
     window.removeEventListener("pointerup", up);
+    window.removeEventListener("pointercancel", teardownEv);
+  };
+  const move = (ev: PointerEvent) => {
+    if (ev.pointerId !== pid) return;
+    const delta = Math.max(ev.clientX - start.x, ev.clientY - start.y);
+    const s = useUiStore.getState();
+    const size = clamp(start.size + delta, MIN_SIZE, MAX_SIZE);
+    s.setHexWidget({
+      size,
+      ...clampPos(s.hexWidget.x, s.hexWidget.y, size),
+    });
+  };
+  const up = (ev: PointerEvent) => {
+    if (ev.pointerId !== pid) return;
+    teardown();
+  };
+  const teardownEv = (ev: PointerEvent) => {
+    if (ev.pointerId !== pid) return;
+    teardown();
   };
   window.addEventListener("pointermove", move);
   window.addEventListener("pointerup", up);
+  window.addEventListener("pointercancel", teardownEv);
 }
 
 /** iPadOS-style flipped-L corner mark implying resize. */
@@ -195,7 +240,7 @@ export function HexFloat() {
   // A float we forced is undone when the header slot returns; one the
   // user dragged out stays where they put it.
   useEffect(() => {
-    const mq = window.matchMedia("(min-width: 1280px)");
+    const mq = window.matchMedia(DESKTOP_MQ);
     let autoFloated = false;
     const apply = () => {
       const s = useUiStore.getState();

@@ -552,6 +552,16 @@ function BreakdownScene({
       y: e.nativeEvent.offsetY,
     };
     const { tile, u, v } = tileFromUv(e.uv);
+    // A second finger hands the gesture to the camera: abort any loop
+    // drag and stop sampling until the pointers clear.
+    if (canvasBridge.pointerCount > 1) {
+      loopDownRef.current = null;
+      if (pinDragRef.current) {
+        pinDragRef.current = false;
+        onCursor("reticle");
+      }
+      return;
+    }
     // Arm the loop drag once the press travels a few pixels.
     if (loopDownRef.current && !pinDragRef.current) {
       const dx = e.nativeEvent.offsetX - loopDownRef.current.x;
@@ -616,6 +626,7 @@ function BreakdownScene({
   // the canvas itself pans with RMB / two fingers instead.
   const onPointerDown = (e: ThreeEvent<PointerEvent>) => {
     if (e.button !== 0 || !e.uv) return;
+    if (canvasBridge.pointerCount > 1) return;
     loopDownRef.current = {
       x: e.nativeEvent.offsetX,
       y: e.nativeEvent.offsetY,
@@ -689,8 +700,9 @@ function BreakdownScene({
   // Single click pins (or unpins) the color sample. Held briefly so a
   // double-click (framing) doesn't also move the pin.
   const onClick = (e: ThreeEvent<MouseEvent>) => {
-    // Ignore drag-release "clicks" (delta = px between down and up).
-    if (!e.uv || e.delta > 4) return;
+    // Ignore drag-release "clicks" (delta = px between down and up) and
+    // the trailing click of a multi-finger gesture.
+    if (!e.uv || e.delta > 4 || canvasBridge.multiTouch) return;
     const { tile, u, v } = tileFromUv(e.uv);
 
     // Touch double-tap = frame the tile: the canvas has touch-action
@@ -931,6 +943,27 @@ export function BreakdownCanvas() {
               : RETICLE_CURSOR,
       }}
       onContextMenu={(e) => e.preventDefault()}
+      // Capture-phase pointer census: a second finger means the gesture
+      // belongs to the camera (two-finger pan/pinch), never the pin.
+      onPointerDownCapture={() => {
+        canvasBridge.pointerCount += 1;
+        if (canvasBridge.pointerCount > 1) canvasBridge.multiTouch = true;
+      }}
+      onPointerUpCapture={() => {
+        canvasBridge.pointerCount = Math.max(0, canvasBridge.pointerCount - 1);
+        if (canvasBridge.pointerCount === 0)
+          // Cleared on a delay so the trailing click still sees the flag.
+          window.setTimeout(() => {
+            canvasBridge.multiTouch = false;
+          }, 120);
+      }}
+      onPointerCancelCapture={() => {
+        canvasBridge.pointerCount = Math.max(0, canvasBridge.pointerCount - 1);
+        if (canvasBridge.pointerCount === 0)
+          window.setTimeout(() => {
+            canvasBridge.multiTouch = false;
+          }, 120);
+      }}
       onDoubleClick={() => {
         // A double-click the mesh already handled arrives here ~instantly
         // after; anything else was outside the tiles — recenter the view.

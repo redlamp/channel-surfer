@@ -125,7 +125,8 @@ export const useSourceStore = create<SourceState>((set, get) => ({
   error: null,
 
   hydrate: async () => {
-    const demos = await fetchDemos();
+    // The library hydrates first so a returning user's own image shows
+    // without waiting on (or being blocked by) the demo downloads.
     let items: MediaItem[] = [];
     let savedId: string | null = null;
     try {
@@ -145,16 +146,34 @@ export const useSourceStore = create<SourceState>((set, get) => ({
       // Unreadable store — library stays empty, demos carry the app.
     }
     const item = savedId ? (items.find((i) => i.id === savedId) ?? null) : null;
-    const demo = savedId
-      ? (demos.find((d) => d.id === savedId) ?? null)
-      : null;
-    const src = item ?? demo ?? demos[0];
-    set({
-      items,
-      demoItems: demos,
-      currentId: src.id,
-      ...selectionFields(src, item === null),
-    });
+    if (item) {
+      set({ items, currentId: item.id, ...selectionFields(item, false) });
+    } else {
+      set({ items });
+    }
+
+    // Demos arrive in the background; a fetch failure leaves a stored
+    // library fully usable instead of wedging the loading state.
+    try {
+      const demos = await fetchDemos();
+      const demoSel =
+        !item && !get().url
+          ? ((savedId ? demos.find((d) => d.id === savedId) : null) ??
+            demos[0])
+          : null;
+      set(
+        demoSel
+          ? {
+              demoItems: demos,
+              currentId: demoSel.id,
+              ...selectionFields(demoSel, true),
+            }
+          : { demoItems: demos },
+      );
+    } catch {
+      if (!get().url)
+        set({ error: "Couldn't load the demo images." });
+    }
   },
 
   loadFiles: async (files) => {
@@ -199,7 +218,8 @@ export const useSourceStore = create<SourceState>((set, get) => ({
     const demo = demoItems.find((d) => d.id === id) ?? null;
     const src = item ?? demo;
     if (!src) return;
-    void idbSetCurrentId(item ? id : null).catch(() => {});
+    // Demo ids persist too, so a selected demo survives reloads.
+    void idbSetCurrentId(id).catch(() => {});
     set({ currentId: id, ...selectionFields(src, item === null) });
   },
 
@@ -213,9 +233,7 @@ export const useSourceStore = create<SourceState>((set, get) => ({
     if (currentId === id) {
       const next = remaining[remaining.length - 1] ?? demoItems[0] ?? null;
       const nextIsItem = remaining.some((i) => i.id === next?.id);
-      void idbSetCurrentId(nextIsItem ? (next?.id ?? null) : null).catch(
-        () => {},
-      );
+      void idbSetCurrentId(next?.id ?? null).catch(() => {});
       set({
         items: remaining,
         currentId: next?.id ?? DEMO_ID,
