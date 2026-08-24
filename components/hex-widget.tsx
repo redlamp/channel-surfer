@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect } from "react";
-import { MoveDiagonal2 } from "lucide-react";
 import { HexagonMini } from "@/components/color-hexagon";
 import { useUiStore } from "@/stores/ui-store";
 
@@ -48,10 +47,12 @@ function beginDrag(e: React.PointerEvent<HTMLElement>) {
     window.removeEventListener("pointerup", up);
     const s = useUiStore.getState();
     if (!start.moved) {
-      // A plain tap/click toggles between the two preset sizes.
-      s.setHexWidget({
-        size: s.hexWidget.size < (SIZE_A + SIZE_B) / 2 ? SIZE_B : SIZE_A,
-      });
+      // A plain tap/click toggles the preset sizes — floating only; the
+      // docked widget stays at header size.
+      if (s.hexWidget.mode === "floating")
+        s.setHexWidget({
+          size: s.hexWidget.size < (SIZE_A + SIZE_B) / 2 ? SIZE_B : SIZE_A,
+        });
     } else if (
       s.hexWidget.mode === "floating" &&
       ev.clientY < DOCK_ZONE_PX &&
@@ -86,17 +87,35 @@ function beginResize(e: React.PointerEvent<HTMLElement>) {
   window.addEventListener("pointerup", up);
 }
 
-/** The header slot: renders the widget while docked (md+ only). */
+/** iPadOS-style flipped-L corner mark implying resize. */
+function ResizeGrip({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 18 18"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={3}
+      strokeLinecap="round"
+      className={className}
+      aria-hidden
+    >
+      <path d="M4 14h5.5a4.5 4.5 0 0 0 4.5-4.5V4" />
+    </svg>
+  );
+}
+
+/** The header slot: renders the widget while docked (xl+ only), always
+ * at the small header size — sizing is a floating-mode privilege. */
 export function HexDock() {
   const w = useUiStore((s) => s.hexWidget);
   if (w.mode !== "docked") return null;
   return (
     <div
       className="shrink-0 cursor-grab touch-none select-none active:cursor-grabbing max-xl:hidden"
-      title="Click to toggle size · drag to detach"
+      title="Drag to detach"
       onPointerDown={beginDrag}
     >
-      <HexagonMini height={w.size} />
+      <HexagonMini height={SIZE_A} />
     </div>
   );
 }
@@ -104,19 +123,37 @@ export function HexDock() {
 /** The free-floating card: draggable anywhere, corner-resizable. */
 export function HexFloat() {
   const w = useUiStore((s) => s.hexWidget);
-  const setHexWidget = useUiStore((s) => s.setHexWidget);
 
-  // Compact-layout screens have no header slot — start out floating.
+  // Compact-layout screens have no header slot, so the widget must live
+  // as a float there — tracked live via matchMedia, not just at mount,
+  // so window resizes and devtools device mode keep the hexagon visible.
+  // A float we forced is undone when the header slot returns; one the
+  // user dragged out stays where they put it.
   useEffect(() => {
-    if (window.innerWidth < 1280) {
-      setHexWidget({
-        mode: "floating",
-        size: 64,
-        x: window.innerWidth - 64 - 28,
-        y: 84,
-      });
-    }
-  }, [setHexWidget]);
+    const mq = window.matchMedia("(min-width: 1280px)");
+    let autoFloated = false;
+    const apply = () => {
+      const s = useUiStore.getState();
+      if (!mq.matches) {
+        if (s.hexWidget.mode === "docked") {
+          autoFloated = true;
+          const size = Math.min(s.hexWidget.size, 96);
+          s.setHexWidget({
+            mode: "floating",
+            size,
+            x: Math.max(window.innerWidth - size - 28, 4),
+            y: 100,
+          });
+        }
+      } else if (autoFloated && s.hexWidget.mode === "floating") {
+        autoFloated = false;
+        s.setHexWidget({ mode: "docked" });
+      }
+    };
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
 
   if (w.mode !== "floating") return null;
   return (
@@ -130,10 +167,10 @@ export function HexFloat() {
       <button
         type="button"
         aria-label="Resize hexagon"
-        className="absolute -bottom-1 -right-1 cursor-nwse-resize rounded-md bg-popover/90 p-0.5 text-muted-foreground hover:text-foreground"
+        className="absolute -bottom-2 -right-2 cursor-nwse-resize p-1 text-muted-foreground hover:text-foreground"
         onPointerDown={beginResize}
       >
-        <MoveDiagonal2 className="size-3.5" aria-hidden />
+        <ResizeGrip className="size-4" />
       </button>
     </div>
   );
