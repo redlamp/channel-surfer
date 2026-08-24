@@ -1,18 +1,20 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { rgbToHex, rgbToHsb } from "@/lib/color";
 import { useUiStore, type SampledColor } from "@/stores/ui-store";
 
 /** Header-sized hexagon: the full HexagonInner (labels off) scaled down
- * to a given height. Padding around the wheel is cropped away so the
- * hexagon itself fills the given height. */
+ * to a given height, cropped to the wheel plus enough margin for the
+ * ring and the hue-line color swatch. */
 export function HexagonMini({ height = 56 }: { height?: number }) {
-  // Scale so the wheel (2R), not the padded box, matches `height`.
-  const s = height / (R * 2);
+  // Breathing room beyond the ring so it and the hue swatch stay visible.
+  const VIS_PAD = 10;
+  const s = height / ((R + VIS_PAD) * 2);
   return (
     <div
       className="relative shrink-0 overflow-hidden"
-      style={{ width: height * 1.02, height }}
+      style={{ width: height, height }}
       aria-hidden
     >
       <div
@@ -21,8 +23,8 @@ export function HexagonMini({ height = 56 }: { height?: number }) {
           transformOrigin: "top left",
           width: BOX,
           height: BOX,
-          marginLeft: -PAD * s,
-          marginTop: -PAD * s,
+          marginLeft: -(PAD - VIS_PAD) * s,
+          marginTop: -(PAD - VIS_PAD) * s,
         }}
       >
         <HexagonInner labels={false} />
@@ -154,9 +156,9 @@ function StemChain({
               x2={pts[i + 1].x}
               y2={pts[i + 1].y}
               stroke={CHANNEL_COLOR[ch]}
-              strokeWidth={2}
+              strokeWidth={3}
               strokeLinecap="round"
-              strokeDasharray={ghost ? "3 3" : undefined}
+              strokeDasharray={ghost ? "4 4" : undefined}
             />
           ),
       )}
@@ -165,10 +167,10 @@ function StemChain({
           key={`${ch}-dot`}
           cx={pts[i + 1].x}
           cy={pts[i + 1].y}
-          r={ghost ? 3 : 4}
+          r={ghost ? 3.5 : 4.5}
           fill={fieldColorAt(pts[i + 1])}
           stroke={CHANNEL_COLOR[ch]}
-          strokeWidth={2}
+          strokeWidth={3}
         />
       ))}
       <circle cx={CENTER} cy={CENTER} r={2.5} fill="#ff0000" />
@@ -250,6 +252,41 @@ export function HexagonInner({ labels = true }: { labels?: boolean }) {
         height={BOX}
         viewBox={`0 0 ${BOX} ${BOX}`}
       >
+        {/* Hue line: dotted ray from the center through the active
+            color's hue to the ring, ending in a swatch of the final
+            color (no degree text). Hidden for greys, whose hue is
+            undefined. */}
+        {(() => {
+          const active = hoverColor ?? pinnedColor;
+          if (!active) return null;
+          const { h, s } = rgbToHsb(active.r, active.g, active.b);
+          if (s === 0) return null;
+          const ex = CENTER + R * Math.cos(h * DEG);
+          const ey = CENTER - R * Math.sin(h * DEG);
+          return (
+            <g>
+              <line
+                x1={CENTER}
+                y1={CENTER}
+                x2={ex}
+                y2={ey}
+                stroke="rgba(255,255,255,0.5)"
+                strokeWidth={1.5}
+                strokeDasharray="4 4"
+              />
+              <circle
+                cx={ex}
+                cy={ey}
+                r={7}
+                fill={rgbToHex(active.r, active.g, active.b)}
+                stroke="rgba(255,255,255,0.9)"
+                strokeWidth={1.5}
+                style={{ filter: "drop-shadow(0 0 1.5px rgba(0,0,0,0.8))" }}
+              />
+            </g>
+          );
+        })()}
+
         {/* Pinned construction chain: dashed, under the live stems so the
             two read as reference vs current. */}
         {pinnedColor && <StemChain sample={pinnedColor} ghost />}
