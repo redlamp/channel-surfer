@@ -23,6 +23,8 @@ interface UiState {
   pinnedColor: SampledColor | null;
   /** The WebGL canvas element, for PNG export. */
   canvasEl: HTMLCanvasElement | null;
+  /** Tile currently under the cursor, null when not over the grid. */
+  hoverTile: number | null;
   /** Tile currently framed by focus mode, null when viewing the grid. */
   framedTile: number | null;
   /** Focus-mode isolation: hide the non-focused tiles while framed. */
@@ -30,6 +32,7 @@ interface UiState {
   setHoverColor: (c: SampledColor | null) => void;
   setPinnedColor: (c: SampledColor | null) => void;
   setCanvasEl: (el: HTMLCanvasElement | null) => void;
+  setHoverTile: (tile: number | null) => void;
   setFramedTile: (tile: number | null) => void;
   setIsolate: (on: boolean) => void;
 }
@@ -54,12 +57,14 @@ export const useUiStore = create<UiState>((set) => ({
   lastHoverColor: null,
   pinnedColor: null,
   canvasEl: null,
+  hoverTile: null,
   framedTile: null,
   isolate: false,
   setHoverColor: (hoverColor) =>
     set(hoverColor ? { hoverColor, lastHoverColor: hoverColor } : { hoverColor }),
   setPinnedColor: (pinnedColor) => set({ pinnedColor }),
   setCanvasEl: (canvasEl) => set({ canvasEl }),
+  setHoverTile: (hoverTile) => set({ hoverTile }),
   setFramedTile: (framedTile) => set({ framedTile }),
   setIsolate: (isolate) => set({ isolate }),
 }));

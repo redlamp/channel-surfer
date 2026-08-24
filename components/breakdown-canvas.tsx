@@ -901,7 +901,11 @@ export function BreakdownCanvas() {
           url={url}
           aspect={width / height}
           hoverTile={hoverTile}
-          onHoverTile={setHoverTile}
+          onHoverTile={(t) => {
+            setHoverTile(t);
+            // Mirrored into the UI store for the hexagon's twilight ring.
+            useUiStore.getState().setHoverTile(t);
+          }}
           onCursor={setCursor}
         />
         <MapControls
