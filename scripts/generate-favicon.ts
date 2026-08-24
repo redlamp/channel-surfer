@@ -1,47 +1,57 @@
 /**
- * Generates the icon set from Taylor's Figma mark
- * (public/brand/icon-source.png — 512x512, the surfer knocked out of an
- * angular rainbow with rounded corners), exported from the Wright
- * Angles file, node 179-2.
+ * Generates the icon set from one master: public/brand/icon-square.png
+ * — Taylor's "Channel Surfer Icon-Square" frame (Wright Angles file,
+ * node 179-8), 512x512, full-bleed, radius 0.
  *
- * Small sizes are just clean downsamples: the mark is already designed
- * to read at favicon scale, so nothing is recomposed here.
+ * Square is the master because rounding is additive: every consumer
+ * either wants square art or can round it, but nothing can un-round a
+ * pre-rounded source.
+ *
+ *   app/icon.png, public/favicon-32.png  rounded here (browsers paint
+ *                                        favicons as-is, no mask)
+ *   app/apple-icon.png                   left square — iOS applies its
+ *                                        own superellipse mask and
+ *                                        composites transparency onto
+ *                                        black, so pre-rounded corners
+ *                                        ghost dark on a home screen
+ *   header mark (components/surfer-app)  square master + CSS radius
  *
  * Run: bun scripts/generate-favicon.ts
  */
 import sharp from "sharp";
 
-const source = Buffer.from(
-  await Bun.file("./public/brand/icon-source.png").arrayBuffer(),
+const SIZE = 512;
+/** Corner radius as a fraction of the icon, matching the design's
+ * rounded frame (60.68 of 512). */
+const RADIUS_RATIO = 60.68 / 512;
+
+const master = Buffer.from(
+  await Bun.file("./public/brand/icon-square.png").arrayBuffer(),
 );
 
-const icon = (size: number) =>
-  sharp(source)
-    .resize(size, size, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
+/** Square, straight from the master. */
+const square = (size: number) =>
+  sharp(master).resize(size, size).png().toBuffer();
+
+/** Rounded: the master masked by a rounded-rect of matching radius. */
+async function rounded(size: number) {
+  const r = Math.round(size * RADIUS_RATIO);
+  const mask = Buffer.from(
+    `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">` +
+      `<rect width="${size}" height="${size}" rx="${r}" ry="${r}" fill="#fff"/>` +
+      `</svg>`,
+  );
+  const flat = await sharp(master).resize(size, size).png().toBuffer();
+  return sharp(flat)
+    .composite([{ input: mask, blend: "dest-in" }])
     .png()
     .toBuffer();
+}
 
-/**
- * KNOWN GAP — the Apple touch icon wants a full-bleed SQUARE source.
- * iOS applies its own superellipse mask and composites transparency
- * onto black, so our pre-rounded corners can show as dark ghosting
- * outside Apple's curve when the site is added to a home screen.
- *
- * Synthesising a square from the rounded art (edge-replication, zoomed
- * backdrops) smears the silhouette, so this stays a plain downsample
- * until a radius-0 variant is exported from the Figma frame — then
- * point `appleSource` at it.
- */
-const appleSource = source;
-
-await Bun.write("./app/icon.png", await icon(512));
-await Bun.write(
-  "./app/apple-icon.png",
-  await sharp(appleSource).resize(180, 180).png().toBuffer(),
-);
-await Bun.write("./public/favicon-32.png", await icon(32));
+await Bun.write("./app/icon.png", await rounded(SIZE));
+await Bun.write("./public/favicon-32.png", await rounded(32));
+await Bun.write("./app/apple-icon.png", await square(180));
 
 console.log(
-  "icons written:",
-  ["app/icon.png", "app/apple-icon.png", "public/favicon-32.png"].join(", "),
+  "icons written: app/icon.png + public/favicon-32.png (rounded), app/apple-icon.png (square)",
 );
