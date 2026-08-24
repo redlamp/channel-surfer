@@ -9,7 +9,7 @@ import { useUiStore, type SampledColor } from "@/stores/ui-store";
  * ring and the hue-line color swatch. */
 export function HexagonMini({ height = 56 }: { height?: number }) {
   // Breathing room beyond the ring so it and the hue swatch stay visible.
-  const VIS_PAD = 10;
+  const VIS_PAD = 20;
   const s = height / ((R + VIS_PAD) * 2);
   return (
     <div
@@ -261,8 +261,10 @@ export function HexagonInner({ labels = true }: { labels?: boolean }) {
           if (!active) return null;
           const { h, s } = rgbToHsb(active.r, active.g, active.b);
           if (s === 0) return null;
-          const ex = CENTER + R * Math.cos(h * DEG);
-          const ey = CENTER - R * Math.sin(h * DEG);
+          // Swatch floats a step beyond the ring.
+          const markR = R + 10;
+          const ex = CENTER + markR * Math.cos(h * DEG);
+          const ey = CENTER - markR * Math.sin(h * DEG);
           return (
             <g>
               <line
