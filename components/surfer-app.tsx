@@ -85,7 +85,7 @@ export function SurferApp() {
           the next, and the hexagon floats over the display area instead
           of living in the header. */}
       <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border px-4 py-3 md:px-6">
-        <div className="min-w-0 shrink-0">
+        <div className="min-w-0 md:flex-1 md:basis-0">
           <h1 className="font-mono text-xl font-semibold tracking-tight">
             Channel Surfer <span aria-hidden>🏄🌈</span>
           </h1>
@@ -93,13 +93,17 @@ export function SurferApp() {
             How RGB and HSB channels build an image
           </p>
         </div>
-        <div className="ml-auto shrink-0 max-md:hidden">
-          <HexagonMini height={81} />
-        </div>
-        <div className="min-w-0 max-md:order-2 max-md:basis-full">
+        {/* The Color Inspector: hexagon + hovered/pinned readouts. The
+            equal flex-1 side regions keep it truly centered on desktop;
+            on mobile it centers on its own row (hexagon floats over the
+            display instead). */}
+        <div className="flex min-w-0 items-center justify-center gap-3 max-md:order-2 max-md:basis-full">
+          <div className="max-md:hidden">
+            <HexagonMini height={81} />
+          </div>
           <ColorReadout />
         </div>
-        <div className="flex shrink-0 items-center gap-2 max-md:order-1 max-md:ml-auto">
+        <div className="flex shrink-0 items-center justify-end gap-2 max-md:order-1 max-md:ml-auto md:flex-1 md:basis-0">
           <Button
             variant="ghost"
             title="Export breakdown as PNG"
