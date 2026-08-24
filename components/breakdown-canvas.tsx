@@ -16,7 +16,7 @@ import {
 } from "@/lib/shaders/breakdown";
 import { HexagonInner } from "@/components/color-hexagon";
 import { useSourceStore } from "@/stores/source-store";
-import { useSettingsStore } from "@/stores/settings-store";
+import { resolveColorMath, useSettingsStore } from "@/stores/settings-store";
 import { canvasBridge, useUiStore } from "@/stores/ui-store";
 import { cn } from "@/lib/utils";
 
@@ -312,7 +312,23 @@ function BreakdownScene({
       mat.uniforms.uHoverTile.value = hoverTileRef.current ?? -1;
       const settings = useSettingsStore.getState();
       mat.uniforms.uHueMapStyle.value = HUE_STYLE_INDEX[settings.hueMapStyle];
-      mat.uniforms.uSrgbMath.value = settings.colorMath === "srgb" ? 1 : 0;
+      // Linear <-> sRGB cross-fade, same easing as the model swap.
+      // "auto" resolves against whatever the image declares.
+      const mathCur = mat.uniforms.uSrgbMath.value as number;
+      const mathGoal =
+        resolveColorMath(
+          settings.colorMath,
+          useSourceStore.getState().currentDetails?.colorSpace ?? null,
+        ) === "srgb"
+          ? 1
+          : 0;
+      if (Math.abs(mathGoal - mathCur) > 0.002) {
+        const k = 1 - Math.exp(-10 * dt);
+        mat.uniforms.uSrgbMath.value = mathCur + (mathGoal - mathCur) * k;
+        active = true;
+      } else if (mathCur !== mathGoal) {
+        mat.uniforms.uSrgbMath.value = mathGoal;
+      }
 
       // HSB <-> HSL cross-fade: ease uColorModel toward the setting.
       const modelCur = mat.uniforms.uColorModel.value as number;
@@ -601,7 +617,10 @@ function BreakdownScene({
         const h = pixelHue(
           id.data,
           i,
-          useSettingsStore.getState().colorMath === "linear",
+          resolveColorMath(
+            useSettingsStore.getState().colorMath,
+            useSourceStore.getState().currentDetails?.colorSpace ?? null,
+          ) === "linear",
         );
         if (h !== null) hueGoalRef.current = h;
       }

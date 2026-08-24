@@ -8,6 +8,24 @@ import { persist } from "zustand/middleware";
 export type HighlightMode = "off" | "tile" | "all";
 /** Color model for the saturation/brightness tiles and readouts. */
 export type ColorModel = "hsb" | "hsl";
+/** Space the tile transforms are computed in. */
+export type ColorMath = "linear" | "srgb" | "auto";
+
+/**
+ * What "auto" resolves to for a given image: its declared gamma if it
+ * has one, else sRGB — untagged files are sRGB by convention, and that
+ * also matches what the readouts compute.
+ */
+export function resolveColorMath(
+  mode: ColorMath,
+  declaredColorSpace: string | null,
+): "linear" | "srgb" {
+  if (mode !== "auto") return mode;
+  if (declaredColorSpace && /gamma 1\.0/i.test(declaredColorSpace))
+    return "linear";
+  return "srgb";
+}
+
 /** Hue-map rendering style (see wiki/research/hue-direction-encoding.md). */
 export type HueMapStyle = "warmcool" | "glow" | "twilight" | "diamond" | "crawl";
 
@@ -25,9 +43,10 @@ interface SettingsState {
   labs: boolean;
   /** Show the color-taylor Hexagon (HSB wheel) below the canvas. */
   showColorHexagon: boolean;
-  /** Tile math space: linear light (the Gigi original) or sRGB values
-   * (matches how the readouts and most tools compute HSB). */
-  colorMath: "linear" | "srgb";
+  /** Tile math space: linear light (the Gigi original), sRGB values
+   * (matches how the readouts and most tools compute HSB), or auto —
+   * follow whatever the loaded image declares. */
+  colorMath: ColorMath;
   setHighlightMode: (mode: HighlightMode) => void;
   setRgbColorize: (on: boolean) => void;
   setColorModel: (model: ColorModel) => void;
@@ -36,7 +55,7 @@ interface SettingsState {
   setRgbFloat: (on: boolean) => void;
   setLabs: (on: boolean) => void;
   setShowColorHexagon: (on: boolean) => void;
-  setColorMath: (space: "linear" | "srgb") => void;
+  setColorMath: (space: ColorMath) => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
