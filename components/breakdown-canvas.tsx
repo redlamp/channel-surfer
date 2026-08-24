@@ -16,7 +16,7 @@ import {
 } from "@/lib/shaders/breakdown";
 import { HexagonInner } from "@/components/color-hexagon";
 import { useSourceStore } from "@/stores/source-store";
-import { resolveColorMath, useSettingsStore } from "@/stores/settings-store";
+import { useSettingsStore } from "@/stores/settings-store";
 import { canvasBridge, useUiStore } from "@/stores/ui-store";
 import { cn } from "@/lib/utils";
 
@@ -315,13 +315,7 @@ function BreakdownScene({
       // Linear <-> sRGB cross-fade, same easing as the model swap.
       // "auto" resolves against whatever the image declares.
       const mathCur = mat.uniforms.uSrgbMath.value as number;
-      const mathGoal =
-        resolveColorMath(
-          settings.colorMath,
-          useSourceStore.getState().currentDetails?.colorSpace ?? null,
-        ) === "srgb"
-          ? 1
-          : 0;
+      const mathGoal = settings.colorMath === "srgb" ? 1 : 0;
       if (Math.abs(mathGoal - mathCur) > 0.002) {
         const k = 1 - Math.exp(-10 * dt);
         mat.uniforms.uSrgbMath.value = mathCur + (mathGoal - mathCur) * k;
@@ -617,10 +611,7 @@ function BreakdownScene({
         const h = pixelHue(
           id.data,
           i,
-          resolveColorMath(
-            useSettingsStore.getState().colorMath,
-            useSourceStore.getState().currentDetails?.colorSpace ?? null,
-          ) === "linear",
+          useSettingsStore.getState().colorMath === "linear",
         );
         if (h !== null) hueGoalRef.current = h;
       }
