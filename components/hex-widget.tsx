@@ -224,10 +224,10 @@ export function HexFloat() {
   return (
     <div
       className={cn(
-        "fixed z-50 cursor-grab touch-none select-none rounded-lg border border-border p-1.5 shadow-[var(--shadow-lg)] transition-[color,background-color,border-color,opacity] active:cursor-grabbing",
+        "fixed z-50 cursor-grab touch-none select-none rounded-lg border border-border bg-popover/20 p-1.5 shadow-[var(--shadow-lg)] transition-[color,background-color,border-color,opacity] active:cursor-grabbing",
         dragging
-          ? "bg-popover/20 opacity-60"
-          : "bg-popover/90 hover:border-ring/70 hover:bg-popover",
+          ? "opacity-60"
+          : "hover:border-ring/70 hover:bg-popover/50",
       )}
       style={{ left: w.x, top: w.y }}
       title="Click to toggle size · drag to move"
