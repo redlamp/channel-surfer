@@ -25,8 +25,11 @@ const surferSrc = Buffer.from(
  * carries a soft dark halo, built by blurring its own alpha.
  */
 async function icon(size: number, fill = 0.86) {
+  // "fill" (not "cover") so the whole hue sweep squeezes into the
+  // square — a cover crop would show only the middle band. Stretching a
+  // linear gradient is invisible, so nothing is distorted.
   const bg = await sharp(rainbow)
-    .resize(size, size, { fit: "cover", position: "center" })
+    .resize(size, size, { fit: "fill" })
     .modulate({ brightness: 0.72, saturation: 0.92 })
     .toBuffer();
 
