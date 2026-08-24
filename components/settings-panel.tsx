@@ -144,18 +144,20 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="space-y-2">
-          <Label>Color math</Label>
+          <Label>Gamma</Label>
           <Segmented
             value={colorMath}
             options={[
-              { value: "linear", label: "Linear light" },
+              { value: "linear", label: "Linear" },
               { value: "srgb", label: "sRGB" },
+              { value: "auto", label: "Auto" },
             ]}
             onChange={setColorMath}
           />
           <p className="text-base text-muted-foreground">
-            Linear is the Gigi original; sRGB matches how the readouts and
-            most tools compute HSB.
+            Which values the tile transforms run on. Linear light is the
+            Gigi original; sRGB matches the readouts and most tools; Auto
+            follows what the loaded image declares.
           </p>
         </div>
 

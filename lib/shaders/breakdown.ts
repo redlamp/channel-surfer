@@ -243,10 +243,13 @@ void main() {
   // Focus-mode isolation: everything but the focused tile disappears.
   if (uIsolateTile > -0.5 && tileIndex != int(uIsolateTile + 0.5)) discard;
 
-  vec3 color = texture2D(uSource, tileUv).rgb;
-  // sRGB math mode converts up front and skips the output conversion, so
-  // every transform sees the same values the readouts compute on.
-  if (uSrgbMath > 0.5) color = linearToSRGB(color);
+  // uSrgbMath is eased on CPU, so the two math modes cross-fade rather
+  // than snap. Blending the input encoding and the output conversion is
+  // exact at both ends (0 = transforms in linear light with an sRGB
+  // output convert, 1 = transforms on sRGB values, no output convert)
+  // and reads as a smooth gamma morph in between.
+  vec3 srcLinear = texture2D(uSource, tileUv).rgb;
+  vec3 color = mix(srcLinear, linearToSRGB(srcLinear), uSrgbMath);
 
   bool peek = uPeekTile > -0.5 && tileIndex == int(uPeekTile + 0.5);
   bool tintTile = !peek && tileIndex >= 6;
@@ -262,12 +265,12 @@ void main() {
   else if (tileIndex == 7) { tint = vec3(0.0, color.g, 0.0); color = vec3(color.g); }
   else                     { tint = vec3(0.0, 0.0, color.b); color = vec3(color.b); }
 
-  if (uSrgbMath < 0.5) color = linearToSRGB(color);
+  color = mix(linearToSRGB(color), color, uSrgbMath);
 
   // Tint cross-fades in sRGB space. A linear-light mix front-loads the
   // perceptible change when fading back to white, which read as a snap.
   if (tintTile) {
-    vec3 tintSrgb = (uSrgbMath > 0.5) ? tint : linearToSRGB(tint);
+    vec3 tintSrgb = mix(linearToSRGB(tint), tint, uSrgbMath);
     color = mix(color, tintSrgb, uRgbColorize);
   }
 
