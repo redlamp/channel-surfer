@@ -7,8 +7,9 @@ browser pane (R3F can't render in a hidden tab).
 Run `bun run dev` → http://localhost:7847
 
 - [ ] Page loads with the SMPTE bars demo in a 3×3 grid, fitted to view
-- [ ] Grid matches the reference mock: row 1 source / hue-mid / hue-max,
-      row 2 hue-map / saturation / brightness, row 3 red / green / blue
+- [ ] Grid matches the reference mock: row 1 source / hue-shaded /
+      hue-flat, row 2 hue-map / saturation / brightness, row 3 red /
+      green / blue
 - [ ] Drag pans; wheel zooms toward the cursor (Figma feel)
 - [ ] Zoomed way in, source pixels are crisp squares (nearest filtering)
 - [ ] Drag-drop an image anywhere on the page → grid swaps, view refits,

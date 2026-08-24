@@ -890,10 +890,13 @@ function BreakdownScene({
   );
 }
 
+// Tiles 1 and 2 both push saturation to full; what separates them is
+// whether brightness survives — shaded keeps it, flat discards it. The
+// old "mid/max saturation" names described a difference that isn't there.
 const TILE_NAMES = [
   "Source",
-  "Hue · mid saturation",
-  "Hue · max saturation",
+  "Hue · shaded",
+  "Hue · flat",
   "Hue map",
   "Saturation",
   "Brightness",
