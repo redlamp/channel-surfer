@@ -23,6 +23,20 @@ interface UiState {
   pinnedColor: SampledColor | null;
   /** The WebGL canvas element, for PNG export. */
   canvasEl: HTMLCanvasElement | null;
+  /** Tile currently under the cursor, null when not over the grid. */
+  hoverTile: number | null;
+  /** The hexagon widget: docked in the header or floating anywhere.
+   * x/y are the floating card's viewport position. */
+  hexWidget: {
+    mode: "docked" | "floating";
+    size: number;
+    x: number;
+    y: number;
+  };
+  /** True while the hexagon widget is mid-drag (drop targets light up). */
+  hexDragging: boolean;
+  /** True while a drag hovers the dock zone — releasing would re-dock. */
+  hexOverDock: boolean;
   /** Tile currently framed by focus mode, null when viewing the grid. */
   framedTile: number | null;
   /** Focus-mode isolation: hide the non-focused tiles while framed. */
@@ -30,8 +44,12 @@ interface UiState {
   setHoverColor: (c: SampledColor | null) => void;
   setPinnedColor: (c: SampledColor | null) => void;
   setCanvasEl: (el: HTMLCanvasElement | null) => void;
+  setHoverTile: (tile: number | null) => void;
   setFramedTile: (tile: number | null) => void;
   setIsolate: (on: boolean) => void;
+  setHexWidget: (patch: Partial<UiState["hexWidget"]>) => void;
+  setHexDragging: (on: boolean) => void;
+  setHexOverDock: (on: boolean) => void;
 }
 
 /**
@@ -47,6 +65,11 @@ export const canvasBridge = {
   refit: null as (() => void) | null,
   /** The hexagon hover card, positioned per-frame by the scene. */
   hexCardEl: null as HTMLDivElement | null,
+  /** Live pointer count over the canvas (capture-phase tracked). */
+  pointerCount: 0,
+  /** True from the moment a second pointer joins until shortly after all
+   * lift — suppresses loop drags and click-pins during two-finger pans. */
+  multiTouch: false,
 };
 
 export const useUiStore = create<UiState>((set) => ({
@@ -54,12 +77,21 @@ export const useUiStore = create<UiState>((set) => ({
   lastHoverColor: null,
   pinnedColor: null,
   canvasEl: null,
+  hoverTile: null,
   framedTile: null,
   isolate: false,
+  hexWidget: { mode: "docked", size: 81, x: 24, y: 90 },
+  hexDragging: false,
+  hexOverDock: false,
   setHoverColor: (hoverColor) =>
     set(hoverColor ? { hoverColor, lastHoverColor: hoverColor } : { hoverColor }),
   setPinnedColor: (pinnedColor) => set({ pinnedColor }),
   setCanvasEl: (canvasEl) => set({ canvasEl }),
+  setHoverTile: (hoverTile) => set({ hoverTile }),
   setFramedTile: (framedTile) => set({ framedTile }),
   setIsolate: (isolate) => set({ isolate }),
+  setHexWidget: (patch) =>
+    set((s) => ({ hexWidget: { ...s.hexWidget, ...patch } })),
+  setHexDragging: (hexDragging) => set({ hexDragging }),
+  setHexOverDock: (hexOverDock) => set({ hexOverDock }),
 }));

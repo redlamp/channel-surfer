@@ -112,7 +112,7 @@ function pixelHue(
   return h < 0 ? h + 1 : h;
 }
 
-type CanvasCursor = "reticle" | "move" | "grabbing" | "hidden";
+type CanvasCursor = "reticle" | "grabbing" | "hidden";
 
 function BreakdownScene({
   url,
@@ -147,9 +147,11 @@ function BreakdownScene({
   const lastRgbTileRef = useRef<number | null>(null);
   const lastRgbHoverAtRef = useRef(0);
   const pinDragRef = useRef(false);
-  const pinHoverRef = useRef(false);
   const pointerPosRef = useRef<{ x: number; y: number } | null>(null);
   const hexCardPosRef = useRef<{ x: number; y: number } | null>(null);
+  const lastTapRef = useRef<{ t: number; x: number; y: number } | null>(null);
+  const loopDownRef = useRef<{ x: number; y: number } | null>(null);
+  const framedZoomRef = useRef(0);
 
   // Hand the DOM shell a way to request frames (tint bar handlers).
   useEffect(() => {
@@ -287,7 +289,7 @@ function BreakdownScene({
       if (!pinDragRef.current) onCursor("grabbing");
     };
     const onEnd = () =>
-      onCursor(pinHoverRef.current ? "move" : "reticle");
+      onCursor("reticle");
     ctl.addEventListener("start", onStart);
     ctl.addEventListener("end", onEnd);
     return () => {
@@ -388,6 +390,20 @@ function BreakdownScene({
       active = true;
     }
 
+    // Zooming out well past the framed-tile zoom dissolves focus mode:
+    // the title unlocks and framing state clears without moving the
+    // camera. Skipped mid-tween (the tween passes through lower zooms).
+    if (
+      zoomedTileRef.current !== null &&
+      !viewGoalRef.current &&
+      state.camera instanceof THREE.OrthographicCamera &&
+      state.camera.zoom < framedZoomRef.current * 0.75
+    ) {
+      zoomedTileRef.current = null;
+      peekRef.current = false;
+      useUiStore.getState().setFramedTile(null);
+    }
+
     // Tint bar: pinned below the last hovered RGB tile, with a short grace
     // window so the cursor can cross the gap onto the bar itself.
     const bar = canvasBridge.tintBarEl;
@@ -453,8 +469,17 @@ function BreakdownScene({
         const fitsAbove = y0 - gap - chh >= 8;
         // Locked per tile: the target only changes when the hovered tile
         // (or the camera) does, so the card sits still within a tile and
-        // tweens between spots as focus moves.
-        if (fitsRight || fitsLeft) {
+        // tweens between spots as focus moves. Edge columns prefer their
+        // outward side so the card leaves the tiled area entirely when
+        // the letterbox space allows.
+        const col = (tile as number) % 3;
+        if (col === 0 && fitsLeft) {
+          gx = x0 - gap - cw;
+          gy = clampY((y0 + y1) / 2 - chh / 2);
+        } else if (col === 2 && fitsRight) {
+          gx = x1 + gap;
+          gy = clampY((y0 + y1) / 2 - chh / 2);
+        } else if (fitsRight || fitsLeft) {
           gx =
             fitsRight && (!fitsLeft || sw - x1 >= x0)
               ? x1 + gap
@@ -527,13 +552,31 @@ function BreakdownScene({
       y: e.nativeEvent.offsetY,
     };
     const { tile, u, v } = tileFromUv(e.uv);
+    // A second finger hands the gesture to the camera: abort any loop
+    // drag and stop sampling until the pointers clear.
+    if (canvasBridge.pointerCount > 1) {
+      loopDownRef.current = null;
+      if (pinDragRef.current) {
+        pinDragRef.current = false;
+        onCursor("reticle");
+      }
+      return;
+    }
+    // Arm the loop drag once the press travels a few pixels.
+    if (loopDownRef.current && !pinDragRef.current) {
+      const dx = e.nativeEvent.offsetX - loopDownRef.current.x;
+      const dy = e.nativeEvent.offsetY - loopDownRef.current.y;
+      if (Math.hypot(dx, dy) > 4) {
+        pinDragRef.current = true;
+        // Hide the cursor so the loop's contents stay visible.
+        onCursor("hidden");
+      }
+    }
     if (pinDragRef.current) {
       setPinAt(u, v);
       invalidate();
       return;
     }
-    pinHoverRef.current = pinDistPx(u, v) < 12;
-    onCursor(pinHoverRef.current ? "move" : "reticle");
     onHoverTile(tile);
     hoverUvRef.current = { u, v };
     const mode = useSettingsStore.getState().highlightMode;
@@ -571,10 +614,7 @@ function BreakdownScene({
     onHoverTile(null);
     hoverUvRef.current = null;
     pointerPosRef.current = null;
-    if (!pinDragRef.current) {
-      pinHoverRef.current = false;
-      onCursor("reticle");
-    }
+    if (!pinDragRef.current) onCursor("reticle");
     useUiStore.getState().setHoverColor(null);
     hueGoalRef.current = DEFAULT_TARGET_HUE;
     invalidate();
@@ -582,49 +622,24 @@ function BreakdownScene({
     window.setTimeout(() => invalidate(), TINT_BAR_GRACE_MS + 50);
   };
 
-  // Grabbing the pinned circle drags the pin instead of the canvas.
+  // Any primary-button (or one-finger) drag moves the selection loop —
+  // the canvas itself pans with RMB / two fingers instead.
   const onPointerDown = (e: ThreeEvent<PointerEvent>) => {
-    if (!e.uv) return;
-    const { u, v } = tileFromUv(e.uv);
-    if (pinDistPx(u, v) >= 12) return;
-    pinDragRef.current = true;
-    const ctl = get().controls as { enabled?: boolean } | null;
-    if (ctl) ctl.enabled = false;
+    if (e.button !== 0 || !e.uv) return;
+    if (canvasBridge.pointerCount > 1) return;
+    loopDownRef.current = {
+      x: e.nativeEvent.offsetX,
+      y: e.nativeEvent.offsetY,
+    };
     (e.target as Element | null)?.setPointerCapture?.(e.pointerId);
-    // Hide the cursor during the drag so the ring's contents stay visible.
-    onCursor("hidden");
   };
 
   const onPointerUp = () => {
+    loopDownRef.current = null;
     if (!pinDragRef.current) return;
     pinDragRef.current = false;
-    const ctl = get().controls as { enabled?: boolean } | null;
-    if (ctl) ctl.enabled = true;
-    onCursor(pinHoverRef.current ? "move" : "reticle");
+    onCursor("reticle");
     invalidate();
-  };
-
-  // Single click pins (or unpins) the color sample. Held briefly so a
-  // double-click (framing) doesn't also move the pin.
-  const onClick = (e: ThreeEvent<MouseEvent>) => {
-    // Ignore drag-release "clicks" (delta = px between down and up).
-    if (!e.uv || e.delta > 4) return;
-    const { u, v } = tileFromUv(e.uv);
-    if (clickTimerRef.current !== null)
-      window.clearTimeout(clickTimerRef.current);
-    clickTimerRef.current = window.setTimeout(() => {
-      clickTimerRef.current = null;
-      if (pinDistPx(u, v) < 12) {
-        // Clicking on (or near) the existing pin clears it.
-        pinUvRef.current = null;
-        pinHoverRef.current = false;
-        onCursor("reticle");
-        useUiStore.getState().setPinnedColor(null);
-      } else {
-        setPinAt(u, v);
-      }
-      invalidate();
-    }, CLICK_DELAY_MS);
   };
 
   const frameTile = useCallback(
@@ -635,6 +650,7 @@ function BreakdownScene({
       const r = tileRect(tile, aspect);
       const zoom =
         Math.min(size.width / r.w, size.height / r.h) * FRAME_MARGIN;
+      framedZoomRef.current = zoom;
       if (snap && camera instanceof THREE.OrthographicCamera) {
         viewGoalRef.current = null;
         camera.position.set(r.cx, r.cy, camera.position.z);
@@ -680,6 +696,59 @@ function BreakdownScene({
       canvasBridge.refit = null;
     };
   }, [unframe]);
+
+  // Single click pins (or unpins) the color sample. Held briefly so a
+  // double-click (framing) doesn't also move the pin.
+  const onClick = (e: ThreeEvent<MouseEvent>) => {
+    // Ignore drag-release "clicks" (delta = px between down and up) and
+    // the trailing click of a multi-finger gesture.
+    if (!e.uv || e.delta > 4 || canvasBridge.multiTouch) return;
+    const { tile, u, v } = tileFromUv(e.uv);
+
+    // Touch double-tap = frame the tile: the canvas has touch-action
+    // none, so the browser never synthesizes dblclick for taps.
+    if ((e.nativeEvent as PointerEvent).pointerType === "touch") {
+      const now = performance.now();
+      const x = e.nativeEvent.offsetX;
+      const y = e.nativeEvent.offsetY;
+      const last = lastTapRef.current;
+      lastTapRef.current = { t: now, x, y };
+      if (
+        last &&
+        now - last.t < 320 &&
+        Math.hypot(x - last.x, y - last.y) < 32
+      ) {
+        lastTapRef.current = null;
+        if (clickTimerRef.current !== null) {
+          window.clearTimeout(clickTimerRef.current);
+          clickTimerRef.current = null;
+        }
+        canvasBridge.meshDblAt = now;
+        if (zoomedTileRef.current === tile) unframe();
+        else frameTile(tile);
+        return;
+      }
+    }
+
+    if (clickTimerRef.current !== null)
+      window.clearTimeout(clickTimerRef.current);
+    // Touch pins wait out the double-tap window; mouse only the dblclick.
+    const pinDelay =
+      (e.nativeEvent as PointerEvent).pointerType === "touch"
+        ? 340
+        : CLICK_DELAY_MS;
+    clickTimerRef.current = window.setTimeout(() => {
+      clickTimerRef.current = null;
+      if (pinDistPx(u, v) < 12) {
+        // Clicking on (or near) the existing pin clears it.
+        pinUvRef.current = null;
+        useUiStore.getState().setPinnedColor(null);
+      } else {
+        setPinAt(u, v);
+      }
+      invalidate();
+    }, pinDelay);
+  };
 
   const onDoubleClick = (e: ThreeEvent<MouseEvent>) => {
     canvasBridge.meshDblAt = performance.now();
@@ -858,7 +927,9 @@ export function BreakdownCanvas() {
     );
   }
 
-  const labelTile = hoverTile ?? framedTile;
+  // While a tile is framed its name stays locked in the title; hover
+  // names only show in the zoomed-out grid view.
+  const labelTile = framedTile ?? hoverTile;
 
   return (
     <div
@@ -869,9 +940,29 @@ export function BreakdownCanvas() {
             ? "none"
             : cursor === "grabbing"
               ? "grabbing"
-              : cursor === "move"
-                ? "move"
-                : RETICLE_CURSOR,
+              : RETICLE_CURSOR,
+      }}
+      onContextMenu={(e) => e.preventDefault()}
+      // Capture-phase pointer census: a second finger means the gesture
+      // belongs to the camera (two-finger pan/pinch), never the pin.
+      onPointerDownCapture={() => {
+        canvasBridge.pointerCount += 1;
+        if (canvasBridge.pointerCount > 1) canvasBridge.multiTouch = true;
+      }}
+      onPointerUpCapture={() => {
+        canvasBridge.pointerCount = Math.max(0, canvasBridge.pointerCount - 1);
+        if (canvasBridge.pointerCount === 0)
+          // Cleared on a delay so the trailing click still sees the flag.
+          window.setTimeout(() => {
+            canvasBridge.multiTouch = false;
+          }, 120);
+      }}
+      onPointerCancelCapture={() => {
+        canvasBridge.pointerCount = Math.max(0, canvasBridge.pointerCount - 1);
+        if (canvasBridge.pointerCount === 0)
+          window.setTimeout(() => {
+            canvasBridge.multiTouch = false;
+          }, 120);
       }}
       onDoubleClick={() => {
         // A double-click the mesh already handled arrives here ~instantly
@@ -892,7 +983,11 @@ export function BreakdownCanvas() {
           url={url}
           aspect={width / height}
           hoverTile={hoverTile}
-          onHoverTile={setHoverTile}
+          onHoverTile={(t) => {
+            setHoverTile(t);
+            // Mirrored into the UI store for the hexagon's twilight ring.
+            useUiStore.getState().setHoverTile(t);
+          }}
           onCursor={setCursor}
         />
         <MapControls
@@ -903,6 +998,19 @@ export function BreakdownCanvas() {
           enableDamping={false}
           minZoom={40}
           maxZoom={20000}
+          // Touch: one finger stays free for color sampling (pointer
+          // events reach the mesh); two fingers pan and pinch-zoom.
+          touches={{
+            ONE: -1 as unknown as THREE.TOUCH,
+            TWO: THREE.TOUCH.DOLLY_PAN,
+          }}
+          // Mouse: RIGHT drags the canvas; LEFT is freed to move the
+          // selection loop (context menu is suppressed on the wrapper).
+          mouseButtons={{
+            LEFT: -1 as unknown as THREE.MOUSE,
+            MIDDLE: THREE.MOUSE.DOLLY,
+            RIGHT: THREE.MOUSE.PAN,
+          }}
         />
       </Canvas>
 

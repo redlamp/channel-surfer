@@ -11,9 +11,19 @@ import {
   type MediaRecord,
 } from "@/lib/idb";
 
-const DEMO_PATH = `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/demo/smpte-bars.png`;
-export const DEMO_ID = "demo";
-const DEMO_NAME = "SMPTE bars (demo)";
+const BASE = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+
+/** Built-in demo images, shipped in public/demo/ (rainbows are lossless
+ * WebP — pixel-identical to the PNG originals, ~38% smaller). First is
+ * the default. */
+const DEMO_DEFS = [
+  { id: "demo", file: "smpte-bars.webp", name: "SMPTE bars" },
+  { id: "demo-linear-rainbow", file: "linear-rainbow.webp", name: "Linear Rainbow" },
+  { id: "demo-radial-rainbow", file: "radial-rainbow.webp", name: "Radial Rainbow" },
+];
+
+/** Id of the primary demo (the app's ultimate fallback). */
+export const DEMO_ID = DEMO_DEFS[0].id;
 
 export interface MediaItem {
   id: string;
@@ -27,9 +37,11 @@ export interface MediaItem {
 }
 
 interface SourceState {
-  /** Library items, oldest first. The demo image is not part of this. */
+  /** Library items, oldest first. Demo images are not part of this. */
   items: MediaItem[];
-  /** Selected item id; DEMO_ID when viewing the fallback demo image. */
+  /** Built-in demo images, in DEMO_DEFS order (empty until hydrate). */
+  demoItems: MediaItem[];
+  /** Selected item id — a library id or a demo id. */
   currentId: string;
   /** Convenience mirrors of the current selection for the canvas. */
   url: string | null;
@@ -43,8 +55,6 @@ interface SourceState {
   select: (id: string) => void;
   remove: (id: string) => Promise<void>;
   resetToDemo: () => void;
-  /** The demo image's blob once fetched (for the details panel). */
-  demoBlob: Blob | null;
 }
 
 /** Intrinsic pixel size; also validates that the blob decodes as an image. */
@@ -72,36 +82,56 @@ function toItem(rec: MediaRecord): MediaItem {
   };
 }
 
-function selectionFields(item: MediaItem | null, demo: MediaItem | null) {
-  const src = item ?? demo;
+function selectionFields(src: MediaItem | null, isDemo: boolean) {
   return {
     url: src?.url ?? null,
     width: src?.width ?? 1,
     height: src?.height ?? 1,
     name: src?.name ?? "",
-    isDemo: item === null,
+    isDemo,
   };
 }
 
-let demoItem: MediaItem | null = null;
-async function fetchDemo(): Promise<MediaItem> {
-  if (demoItem) return demoItem;
-  const blob = await fetch(DEMO_PATH).then((r) => r.blob());
+const demoItemCache = new Map<string, MediaItem>();
+async function loadDemoDef(d: (typeof DEMO_DEFS)[number]): Promise<MediaItem> {
+  const cached = demoItemCache.get(d.id);
+  if (cached) return cached;
+  const res = await fetch(encodeURI(`${BASE}/demo/${d.file}`));
+  if (!res.ok) throw new Error(`demo fetch ${res.status}`);
+  const blob = await res.blob();
   const { width, height } = await probeImage(blob);
-  demoItem = {
-    id: DEMO_ID,
-    name: DEMO_NAME,
+  const item = {
+    id: d.id,
+    name: `${d.name} (demo)`,
     width,
     height,
     addedAt: 0,
     url: URL.createObjectURL(blob),
     blob,
   };
-  return demoItem;
+  demoItemCache.set(d.id, item);
+  return item;
 }
+
+/** All demos, in DEMO_DEFS order, skipping any that failed to load. */
+async function loadAllDemos(): Promise<MediaItem[]> {
+  const settled = await Promise.allSettled(DEMO_DEFS.map(loadDemoDef));
+  return settled
+    .filter(
+      (s): s is PromiseFulfilledResult<MediaItem> => s.status === "fulfilled",
+    )
+    .map((s) => s.value);
+}
+
+const onIdle = (fn: () => void) => {
+  if (typeof requestIdleCallback === "function")
+    requestIdleCallback(fn, { timeout: 2000 });
+  else setTimeout(fn, 1200);
+};
 
 export const useSourceStore = create<SourceState>((set, get) => ({
   items: [],
+  demoItems: [],
   currentId: DEMO_ID,
   url: null,
   width: 1,
@@ -109,12 +139,12 @@ export const useSourceStore = create<SourceState>((set, get) => ({
   name: "",
   isDemo: true,
   error: null,
-  demoBlob: null,
 
   hydrate: async () => {
-    const demo = await fetchDemo();
+    // The library hydrates first so a returning user's own image shows
+    // without waiting on (or being blocked by) the demo downloads.
     let items: MediaItem[] = [];
-    let currentId: string = DEMO_ID;
+    let savedId: string | null = null;
     try {
       // Migrate the pre-library single record, if present.
       const legacy = await idbTakeLegacyCurrent();
@@ -125,18 +155,52 @@ export const useSourceStore = create<SourceState>((set, get) => ({
       }
       const records = await idbGetAllItems();
       items = records.map(toItem);
-      const savedId = await idbGetCurrentId();
-      if (savedId && items.some((i) => i.id === savedId)) currentId = savedId;
-      else if (legacy && items.length > 0) currentId = items[items.length - 1].id;
+      savedId = await idbGetCurrentId();
+      if (legacy && !savedId && items.length > 0)
+        savedId = items[items.length - 1].id;
     } catch {
-      // Unreadable store — library stays empty, demo carries the app.
+      // Unreadable store — library stays empty, demos carry the app.
     }
-    const item = items.find((i) => i.id === currentId) ?? null;
-    set({
-      items,
-      currentId: item ? currentId : DEMO_ID,
-      demoBlob: demo.blob,
-      ...selectionFields(item, demo),
+    const item = savedId ? (items.find((i) => i.id === savedId) ?? null) : null;
+    if (item) {
+      set({ items, currentId: item.id, ...selectionFields(item, false) });
+    } else {
+      set({ items });
+    }
+
+    // Staged demo loading: only when a demo is needed as the immediate
+    // fallback does one (the saved/default) fetch eagerly — the rest
+    // wait for idle so they never compete with the startup path.
+    const needFallback = !item && !get().url;
+    if (needFallback) {
+      const def =
+        DEMO_DEFS.find((d) => d.id === savedId) ?? DEMO_DEFS[0];
+      try {
+        const first = await loadDemoDef(def);
+        set({
+          demoItems: [first],
+          currentId: first.id,
+          ...selectionFields(first, true),
+        });
+      } catch {
+        set({ error: "Couldn't load the demo images." });
+      }
+    }
+    onIdle(() => {
+      void loadAllDemos().then((demos) => {
+        if (demos.length === 0) return;
+        const st = get();
+        const demoSel = !st.url ? demos[0] : null;
+        set(
+          demoSel
+            ? {
+                demoItems: demos,
+                currentId: demoSel.id,
+                ...selectionFields(demoSel, true),
+              }
+            : { demoItems: demos },
+        );
+      });
     });
   },
 
@@ -169,7 +233,7 @@ export const useSourceStore = create<SourceState>((set, get) => ({
         items,
         currentId: current.id,
         error: failed,
-        ...selectionFields(current, demoItem),
+        ...selectionFields(current, false),
       });
     } else if (failed) {
       set({ error: failed });
@@ -177,29 +241,31 @@ export const useSourceStore = create<SourceState>((set, get) => ({
   },
 
   select: (id) => {
-    const item = get().items.find((i) => i.id === id) ?? null;
-    if (id !== DEMO_ID && !item) return;
-    void idbSetCurrentId(item ? id : null).catch(() => {});
-    set({
-      currentId: item ? id : DEMO_ID,
-      ...selectionFields(item, demoItem),
-    });
+    const { items, demoItems } = get();
+    const item = items.find((i) => i.id === id) ?? null;
+    const demo = demoItems.find((d) => d.id === id) ?? null;
+    const src = item ?? demo;
+    if (!src) return;
+    // Demo ids persist too, so a selected demo survives reloads.
+    void idbSetCurrentId(id).catch(() => {});
+    set({ currentId: id, ...selectionFields(src, item === null) });
   },
 
   remove: async (id) => {
-    const { items, currentId } = get();
+    const { items, demoItems, currentId } = get();
     const removed = items.find((i) => i.id === id);
     if (!removed) return;
     const remaining = items.filter((i) => i.id !== id);
     URL.revokeObjectURL(removed.url);
     void idbDeleteItem(id).catch(() => {});
     if (currentId === id) {
-      const next = remaining[remaining.length - 1] ?? null;
+      const next = remaining[remaining.length - 1] ?? demoItems[0] ?? null;
+      const nextIsItem = remaining.some((i) => i.id === next?.id);
       void idbSetCurrentId(next?.id ?? null).catch(() => {});
       set({
         items: remaining,
         currentId: next?.id ?? DEMO_ID,
-        ...selectionFields(next, demoItem),
+        ...selectionFields(next, !nextIsItem),
       });
     } else {
       set({ items: remaining });
@@ -207,7 +273,6 @@ export const useSourceStore = create<SourceState>((set, get) => ({
   },
 
   resetToDemo: () => {
-    void idbSetCurrentId(null).catch(() => {});
-    set({ currentId: DEMO_ID, ...selectionFields(null, demoItem) });
+    get().select(DEMO_ID);
   },
 }));

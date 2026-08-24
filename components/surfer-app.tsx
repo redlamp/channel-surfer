@@ -5,10 +5,11 @@ import { Download, LibraryBig, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BreakdownCanvas } from "@/components/breakdown-canvas";
 import { ColorReadout } from "@/components/color-readout";
+import { HexDock, HexFloat } from "@/components/hex-widget";
 import { ColorSteps } from "@/components/color-steps";
 import { LibraryPanel } from "@/components/library-panel";
 import { SettingsPanel } from "@/components/settings-panel";
-import { DEMO_ID, useSourceStore } from "@/stores/source-store";
+import { useSourceStore } from "@/stores/source-store";
 import { useUiStore } from "@/stores/ui-store";
 
 export function SurferApp() {
@@ -50,16 +51,14 @@ export function SurferApp() {
       e.preventDefault();
       const s = useSourceStore.getState();
       const order = [...s.items.map((i) => i.id)].reverse();
-      order.push(DEMO_ID);
+      order.push(...s.demoItems.map((d) => d.id));
       const idx = Math.max(order.indexOf(s.currentId), 0);
       const next =
         e.key === "PageDown"
           ? Math.min(idx + 1, order.length - 1)
           : Math.max(idx - 1, 0);
       if (next === idx) return;
-      const id = order[next];
-      if (id === DEMO_ID) s.resetToDemo();
-      else s.select(id);
+      s.select(order[next]);
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -81,19 +80,27 @@ export function SurferApp() {
         handleFiles(e.dataTransfer.files);
       }}
     >
-      <header className="flex items-center justify-between gap-4 border-b border-border px-4 py-3 md:px-6">
-        <div className="shrink-0">
+      {/* Crowding: subtitle hides first (<1440px), then the header snaps
+          to the compact layout below xl: logo + icon-only buttons on one
+          row, Inspector pickers on the next, hexagon floating over the
+          display area instead of docked. */}
+      <header className="group flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border px-4 py-3 xl:px-6">
+        <div className="min-w-0 xl:flex-1 xl:basis-0">
           <h1 className="font-mono text-xl font-semibold tracking-tight">
             Channel Surfer <span aria-hidden>🏄🌈</span>
           </h1>
-          <p className="text-base text-muted-foreground">
+          <p className="text-base text-muted-foreground max-[1440px]:hidden">
             How RGB and HSB channels build an image
           </p>
         </div>
-        <div className="min-w-0 flex-1">
+        {/* The Color Inspector: hexagon + hovered/pinned readouts. The
+            equal flex-1 side regions keep it truly centered on desktop;
+            in the compact layout it centers on its own row. */}
+        <div className="flex min-w-0 items-center justify-center gap-3 max-xl:order-2 max-xl:basis-full">
+          <HexDock />
           <ColorReadout />
         </div>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 items-center justify-end gap-2 max-xl:order-1 max-xl:ml-auto xl:flex-1 xl:basis-0">
           <Button
             variant="ghost"
             title="Export breakdown as PNG"
@@ -110,17 +117,19 @@ export function SurferApp() {
                 URL.revokeObjectURL(a.href);
               });
             }}
+            aria-label="Export breakdown as PNG"
           >
             <Download aria-hidden />
-            Export
+            <span className="max-xl:hidden">Export</span>
           </Button>
           <Button
             variant="ghost"
+            aria-label="Media Library"
             aria-pressed={libraryOpen}
             onClick={() => setLibraryOpen((v) => !v)}
           >
             <LibraryBig aria-hidden />
-            Media Library
+            <span className="max-xl:hidden">Media Library</span>
           </Button>
           <Button
             variant="ghost"
@@ -152,6 +161,7 @@ export function SurferApp() {
         )}
       </main>
 
+      <HexFloat />
       <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-4 py-2 md:px-6">
         <p className="text-base text-muted-foreground">
           {error ?? (name ? `${name} — ${width}×${height}` : "Loading…")}
