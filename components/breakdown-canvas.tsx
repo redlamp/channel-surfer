@@ -151,6 +151,7 @@ function BreakdownScene({
   const hexCardPosRef = useRef<{ x: number; y: number } | null>(null);
   const lastTapRef = useRef<{ t: number; x: number; y: number } | null>(null);
   const loopDownRef = useRef<{ x: number; y: number } | null>(null);
+  const framedZoomRef = useRef(0);
 
   // Hand the DOM shell a way to request frames (tint bar handlers).
   useEffect(() => {
@@ -389,6 +390,20 @@ function BreakdownScene({
       active = true;
     }
 
+    // Zooming out well past the framed-tile zoom dissolves focus mode:
+    // the title unlocks and framing state clears without moving the
+    // camera. Skipped mid-tween (the tween passes through lower zooms).
+    if (
+      zoomedTileRef.current !== null &&
+      !viewGoalRef.current &&
+      state.camera instanceof THREE.OrthographicCamera &&
+      state.camera.zoom < framedZoomRef.current * 0.75
+    ) {
+      zoomedTileRef.current = null;
+      peekRef.current = false;
+      useUiStore.getState().setFramedTile(null);
+    }
+
     // Tint bar: pinned below the last hovered RGB tile, with a short grace
     // window so the cursor can cross the gap onto the bar itself.
     const bar = canvasBridge.tintBarEl;
@@ -624,6 +639,7 @@ function BreakdownScene({
       const r = tileRect(tile, aspect);
       const zoom =
         Math.min(size.width / r.w, size.height / r.h) * FRAME_MARGIN;
+      framedZoomRef.current = zoom;
       if (snap && camera instanceof THREE.OrthographicCamera) {
         viewGoalRef.current = null;
         camera.position.set(r.cx, r.cy, camera.position.z);
@@ -899,7 +915,9 @@ export function BreakdownCanvas() {
     );
   }
 
-  const labelTile = hoverTile ?? framedTile;
+  // While a tile is framed its name stays locked in the title; hover
+  // names only show in the zoomed-out grid view.
+  const labelTile = framedTile ?? hoverTile;
 
   return (
     <div
