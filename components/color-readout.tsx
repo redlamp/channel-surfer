@@ -158,7 +158,7 @@ export function ColorReadout() {
 
   return (
     <div className="flex items-center justify-end gap-3">
-      <HexagonMini height={54} />
+      <HexagonMini height={81} />
       <div className="flex flex-col items-end gap-0.5">
         <ReadoutRow
           sample={pinnedColor}
