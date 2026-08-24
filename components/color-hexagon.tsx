@@ -3,6 +3,34 @@
 import { useEffect, useRef } from "react";
 import { useUiStore, type SampledColor } from "@/stores/ui-store";
 
+/** Header-sized hexagon: the full HexagonInner (labels off) scaled down
+ * to a given height. Padding around the wheel is cropped away so the
+ * hexagon itself fills the given height. */
+export function HexagonMini({ height = 56 }: { height?: number }) {
+  // Scale so the wheel (2R), not the padded box, matches `height`.
+  const s = height / (R * 2);
+  return (
+    <div
+      className="relative shrink-0 overflow-hidden"
+      style={{ width: height * 1.02, height }}
+      aria-hidden
+    >
+      <div
+        style={{
+          transform: `scale(${s})`,
+          transformOrigin: "top left",
+          width: BOX,
+          height: BOX,
+          marginLeft: -PAD * s,
+          marginTop: -PAD * s,
+        }}
+      >
+        <HexagonInner labels={false} />
+      </div>
+    </div>
+  );
+}
+
 /** Circumradius of the hexagon in CSS px (corners sit on this circle). */
 const R = 72;
 /** Room around the hexagon for the corner labels. */
@@ -152,7 +180,7 @@ function StemChain({
  * and blue segments chain from the center dot to the sample's position,
  * each tipped with a channel-ringed dot. Rendered inside the hover card
  * that BreakdownCanvas positions each frame. */
-export function HexagonInner() {
+export function HexagonInner({ labels = true }: { labels?: boolean }) {
   const hoverColor = useUiStore((s) => s.hoverColor);
   const pinnedColor = useUiStore((s) => s.pinnedColor);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -202,19 +230,20 @@ export function HexagonInner() {
         className="absolute"
         style={{ left: PAD, top: PAD, width: R * 2, height: R * 2 }}
       />
-      {CORNER_LABELS.map((l) => (
-        <span
-          key={l.text}
-          className="absolute -translate-x-1/2 -translate-y-1/2 font-mono text-base font-bold"
-          style={{
-            color: l.color,
-            left: CENTER + (R + 11) * Math.cos(l.deg * DEG),
-            top: CENTER - (R + 11) * Math.sin(l.deg * DEG),
-          }}
-        >
-          {l.text}
-        </span>
-      ))}
+      {labels &&
+        CORNER_LABELS.map((l) => (
+          <span
+            key={l.text}
+            className="absolute -translate-x-1/2 -translate-y-1/2 font-mono text-base font-bold"
+            style={{
+              color: l.color,
+              left: CENTER + (R + 11) * Math.cos(l.deg * DEG),
+              top: CENTER - (R + 11) * Math.sin(l.deg * DEG),
+            }}
+          >
+            {l.text}
+          </span>
+        ))}
       <svg
         className="absolute inset-0"
         width={BOX}
