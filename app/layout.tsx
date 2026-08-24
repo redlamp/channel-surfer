@@ -10,7 +10,7 @@ const SITE_URL = `https://redlamp.github.io${process.env.NEXT_PUBLIC_BASE_PATH ?
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
-  title: "Channel Surfer",
+  title: "Channel Surfer 🏄🌈",
   description:
     "Break an image into its RGB and HSB channels to see how each contributes to the final picture.",
   openGraph: {
