@@ -221,6 +221,8 @@ export function LibraryPanel() {
         {items.length === 0 && (
           <p className="px-2 py-3 text-base text-muted-foreground">
             Drop images anywhere to build your library.
+            <br />
+            Images are stored locally on your machine, never uploaded.
           </p>
         )}
       </div>
