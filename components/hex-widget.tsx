@@ -128,7 +128,7 @@ export function HexDock() {
   }
   return (
     <div
-      className="shrink-0 cursor-grab touch-none select-none rounded-lg p-1 transition-colors hover:bg-muted/70 active:cursor-grabbing max-xl:hidden"
+      className="shrink-0 cursor-grab touch-none select-none rounded-lg p-1 transition-colors group-hover:bg-muted/70 active:cursor-grabbing max-xl:hidden"
       title="Drag to detach"
       onPointerDown={beginDrag}
     >

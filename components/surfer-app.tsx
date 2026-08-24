@@ -84,7 +84,7 @@ export function SurferApp() {
           to the compact layout below xl: logo + icon-only buttons on one
           row, Inspector pickers on the next, hexagon floating over the
           display area instead of docked. */}
-      <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border px-4 py-3 xl:px-6">
+      <header className="group flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border px-4 py-3 xl:px-6">
         <div className="min-w-0 xl:flex-1 xl:basis-0">
           <h1 className="font-mono text-xl font-semibold tracking-tight">
             Channel Surfer <span aria-hidden>🏄🌈</span>
