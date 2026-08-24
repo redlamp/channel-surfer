@@ -112,7 +112,7 @@ function pixelHue(
   return h < 0 ? h + 1 : h;
 }
 
-type CanvasCursor = "reticle" | "move" | "grabbing" | "hidden";
+type CanvasCursor = "reticle" | "grabbing" | "hidden";
 
 function BreakdownScene({
   url,
@@ -147,10 +147,10 @@ function BreakdownScene({
   const lastRgbTileRef = useRef<number | null>(null);
   const lastRgbHoverAtRef = useRef(0);
   const pinDragRef = useRef(false);
-  const pinHoverRef = useRef(false);
   const pointerPosRef = useRef<{ x: number; y: number } | null>(null);
   const hexCardPosRef = useRef<{ x: number; y: number } | null>(null);
   const lastTapRef = useRef<{ t: number; x: number; y: number } | null>(null);
+  const loopDownRef = useRef<{ x: number; y: number } | null>(null);
 
   // Hand the DOM shell a way to request frames (tint bar handlers).
   useEffect(() => {
@@ -288,7 +288,7 @@ function BreakdownScene({
       if (!pinDragRef.current) onCursor("grabbing");
     };
     const onEnd = () =>
-      onCursor(pinHoverRef.current ? "move" : "reticle");
+      onCursor("reticle");
     ctl.addEventListener("start", onStart);
     ctl.addEventListener("end", onEnd);
     return () => {
@@ -537,13 +537,21 @@ function BreakdownScene({
       y: e.nativeEvent.offsetY,
     };
     const { tile, u, v } = tileFromUv(e.uv);
+    // Arm the loop drag once the press travels a few pixels.
+    if (loopDownRef.current && !pinDragRef.current) {
+      const dx = e.nativeEvent.offsetX - loopDownRef.current.x;
+      const dy = e.nativeEvent.offsetY - loopDownRef.current.y;
+      if (Math.hypot(dx, dy) > 4) {
+        pinDragRef.current = true;
+        // Hide the cursor so the loop's contents stay visible.
+        onCursor("hidden");
+      }
+    }
     if (pinDragRef.current) {
       setPinAt(u, v);
       invalidate();
       return;
     }
-    pinHoverRef.current = pinDistPx(u, v) < 12;
-    onCursor(pinHoverRef.current ? "move" : "reticle");
     onHoverTile(tile);
     hoverUvRef.current = { u, v };
     const mode = useSettingsStore.getState().highlightMode;
@@ -581,10 +589,7 @@ function BreakdownScene({
     onHoverTile(null);
     hoverUvRef.current = null;
     pointerPosRef.current = null;
-    if (!pinDragRef.current) {
-      pinHoverRef.current = false;
-      onCursor("reticle");
-    }
+    if (!pinDragRef.current) onCursor("reticle");
     useUiStore.getState().setHoverColor(null);
     hueGoalRef.current = DEFAULT_TARGET_HUE;
     invalidate();
@@ -592,25 +597,22 @@ function BreakdownScene({
     window.setTimeout(() => invalidate(), TINT_BAR_GRACE_MS + 50);
   };
 
-  // Grabbing the pinned circle drags the pin instead of the canvas.
+  // Any primary-button (or one-finger) drag moves the selection loop —
+  // the canvas itself pans with RMB / two fingers instead.
   const onPointerDown = (e: ThreeEvent<PointerEvent>) => {
-    if (!e.uv) return;
-    const { u, v } = tileFromUv(e.uv);
-    if (pinDistPx(u, v) >= 12) return;
-    pinDragRef.current = true;
-    const ctl = get().controls as { enabled?: boolean } | null;
-    if (ctl) ctl.enabled = false;
+    if (e.button !== 0 || !e.uv) return;
+    loopDownRef.current = {
+      x: e.nativeEvent.offsetX,
+      y: e.nativeEvent.offsetY,
+    };
     (e.target as Element | null)?.setPointerCapture?.(e.pointerId);
-    // Hide the cursor during the drag so the ring's contents stay visible.
-    onCursor("hidden");
   };
 
   const onPointerUp = () => {
+    loopDownRef.current = null;
     if (!pinDragRef.current) return;
     pinDragRef.current = false;
-    const ctl = get().controls as { enabled?: boolean } | null;
-    if (ctl) ctl.enabled = true;
-    onCursor(pinHoverRef.current ? "move" : "reticle");
+    onCursor("reticle");
     invalidate();
   };
 
@@ -712,8 +714,6 @@ function BreakdownScene({
       if (pinDistPx(u, v) < 12) {
         // Clicking on (or near) the existing pin clears it.
         pinUvRef.current = null;
-        pinHoverRef.current = false;
-        onCursor("reticle");
         useUiStore.getState().setPinnedColor(null);
       } else {
         setPinAt(u, v);
@@ -910,10 +910,9 @@ export function BreakdownCanvas() {
             ? "none"
             : cursor === "grabbing"
               ? "grabbing"
-              : cursor === "move"
-                ? "move"
-                : RETICLE_CURSOR,
+              : RETICLE_CURSOR,
       }}
+      onContextMenu={(e) => e.preventDefault()}
       onDoubleClick={() => {
         // A double-click the mesh already handled arrives here ~instantly
         // after; anything else was outside the tiles — recenter the view.
@@ -953,6 +952,13 @@ export function BreakdownCanvas() {
           touches={{
             ONE: -1 as unknown as THREE.TOUCH,
             TWO: THREE.TOUCH.DOLLY_PAN,
+          }}
+          // Mouse: RIGHT drags the canvas; LEFT is freed to move the
+          // selection loop (context menu is suppressed on the wrapper).
+          mouseButtons={{
+            LEFT: -1 as unknown as THREE.MOUSE,
+            MIDDLE: THREE.MOUSE.DOLLY,
+            RIGHT: THREE.MOUSE.PAN,
           }}
         />
       </Canvas>
