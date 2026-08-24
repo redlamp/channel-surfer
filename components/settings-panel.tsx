@@ -150,14 +150,12 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
             options={[
               { value: "linear", label: "Linear" },
               { value: "srgb", label: "sRGB" },
-              { value: "auto", label: "Auto" },
             ]}
             onChange={setColorMath}
           />
           <p className="text-base text-muted-foreground">
-            Which values the tile transforms run on. Linear light is the
-            Gigi original; sRGB matches the readouts and most tools; Auto
-            follows what the loaded image declares.
+            Which values the tile transforms run on. sRGB matches the
+            readouts and most tools; linear light is the Gigi original.
           </p>
         </div>
 
@@ -211,7 +209,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
             setShowColorSteps(false);
             setRgbFloat(false);
             setShowColorHexagon(false);
-            setColorMath("auto");
+            setColorMath("srgb");
           }}
         >
           Reset to defaults

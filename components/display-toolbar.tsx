@@ -1,8 +1,7 @@
 "use client";
 
 import { Segmented } from "@/components/ui/segmented";
-import { resolveColorMath, useSettingsStore } from "@/stores/settings-store";
-import { useSourceStore } from "@/stores/source-store";
+import { useSettingsStore } from "@/stores/settings-store";
 
 /**
  * The two settings that change what the tiles mean, surfaced on the main
@@ -15,9 +14,6 @@ export function DisplayToolbar() {
   const setColorModel = useSettingsStore((s) => s.setColorModel);
   const colorMath = useSettingsStore((s) => s.colorMath);
   const setColorMath = useSettingsStore((s) => s.setColorMath);
-
-  const declared = useSourceStore((s) => s.currentDetails?.colorSpace ?? null);
-  const resolved = resolveColorMath(colorMath, declared);
 
   return (
     <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
@@ -33,10 +29,7 @@ export function DisplayToolbar() {
           ]}
         />
       </div>
-      {/* relative + an absolutely placed hint: the resolved-gamma note
-          sits beside the control without joining the layout, so the
-          toggles stay put whether or not Auto is selected. */}
-      <div className="relative flex items-center gap-2">
+      <div className="flex items-center gap-2">
         <span className="font-mono text-base text-muted-foreground">Gamma</span>
         <Segmented
           size="sm"
@@ -54,18 +47,8 @@ export function DisplayToolbar() {
               title:
                 "Transforms run on gamma-encoded sRGB values (matches the readouts and most tools)",
             },
-            {
-              value: "auto",
-              label: "Auto",
-              title: `Follow the image — ${declared ?? "reading…"} → ${resolved === "srgb" ? "sRGB" : "Linear"}`,
-            },
           ]}
         />
-        {colorMath === "auto" && (
-          <span className="pointer-events-none absolute left-full ml-2 whitespace-nowrap font-mono text-base text-muted-foreground">
-            → {resolved === "srgb" ? "sRGB" : "Linear"}
-          </span>
-        )}
       </div>
     </div>
   );

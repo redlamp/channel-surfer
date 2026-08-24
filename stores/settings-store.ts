@@ -8,23 +8,15 @@ import { persist } from "zustand/middleware";
 export type HighlightMode = "off" | "tile" | "all";
 /** Color model for the saturation/brightness tiles and readouts. */
 export type ColorModel = "hsb" | "hsl";
-/** Space the tile transforms are computed in. */
-export type ColorMath = "linear" | "srgb" | "auto";
-
 /**
- * What "auto" resolves to for a given image: its declared gamma if it
- * has one, else sRGB — untagged files are sRGB by convention, and that
- * also matches what the readouts compute.
+ * Space the tile transforms are computed in.
+ *
+ * There was an "auto" mode that followed the image's declared gamma;
+ * it was dropped because real files effectively never declare linear
+ * (only a PNG with a gAMA 1.0 chunk and no sRGB/ICC tag would), so it
+ * never changed state and the control read as broken.
  */
-export function resolveColorMath(
-  mode: ColorMath,
-  declaredColorSpace: string | null,
-): "linear" | "srgb" {
-  if (mode !== "auto") return mode;
-  if (declaredColorSpace && /gamma 1\.0/i.test(declaredColorSpace))
-    return "linear";
-  return "srgb";
-}
+export type ColorMath = "linear" | "srgb";
 
 /** Hue-map rendering style (see wiki/research/hue-direction-encoding.md). */
 export type HueMapStyle = "warmcool" | "glow" | "twilight" | "diamond" | "crawl";
@@ -69,7 +61,7 @@ export const useSettingsStore = create<SettingsState>()(
       rgbFloat: false,
       labs: false,
       showColorHexagon: false,
-      colorMath: "auto",
+      colorMath: "srgb",
       setHighlightMode: (highlightMode) => set({ highlightMode }),
       setRgbColorize: (rgbColorize) => set({ rgbColorize }),
       setColorModel: (colorModel) => set({ colorModel }),
@@ -86,10 +78,11 @@ export const useSettingsStore = create<SettingsState>()(
       // "bands" hue-map style became the animated "crawl". v3: twilight
       // won the style bake-off and becomes the default once for everyone;
       // the other styles live behind the Labs flag. v4: black-to-color
-      // tint becomes the default once. v5: gamma follows the image by
-      // default (colorMath "auto").
+      // tint becomes the default once. v5: gamma followed the image
+      // ("auto"). v6: auto is gone — those settings move to sRGB, now
+      // the default.
       // (New fields are additive — zustand merges defaults in.)
-      version: 5,
+      version: 6,
       migrate: (persisted, version) => {
         const state = persisted as Omit<
           Partial<SettingsState>,
@@ -100,7 +93,7 @@ export const useSettingsStore = create<SettingsState>()(
           state.hueMapStyle = "crawl";
         if (version <= 2) state.hueMapStyle = "twilight";
         if (version <= 3) state.rgbColorize = true;
-        if (version <= 4) state.colorMath = "auto";
+        if (version <= 5) state.colorMath = "srgb";
         return state as SettingsState;
       },
     },
