@@ -13,6 +13,8 @@ video into channels to teach how shaders see color.
 
 - [[decision-web-refactor-stack]] — why Next.js/R3F/shadcn, repo, deploy
 - [[backlog-interactivity-ideas]] — Taylor's future-feature wishlist
+- [[session-handoff-2026-08-24]] — bridge from the kickoff session
+  (rooted in the old ImageView folder) to sessions in this repo
 
 ## Origin
 
