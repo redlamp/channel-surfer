@@ -88,15 +88,16 @@ export function SurferApp() {
         <div className="min-w-0 xl:flex-1 xl:basis-0">
           <h1 className="flex items-center gap-2 font-mono text-xl font-semibold tracking-tight">
             {/* The app mark stands in for the emoji the title used to
-                carry; next/image is off under static export, so this is
-                a plain img against the same file the favicon uses. */}
+                carry. Square master + CSS radius, so the corner curve is
+                a style decision here rather than baked into the asset;
+                next/image is off under static export, hence a plain img. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/favicon-32.png`}
+              src={`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/brand/icon-square.png`}
               alt=""
               width={28}
               height={28}
-              className="size-7 shrink-0 rounded-[6px]"
+              className="size-7 shrink-0 rounded-[4px]"
             />
             Channel Surfer
           </h1>
