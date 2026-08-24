@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Circle, Crosshair } from "lucide-react";
+import { Circle } from "lucide-react";
 import { rgbToHex, rgbToHsb, rgbToHsl } from "@/lib/color";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useUiStore, type SampledColor } from "@/stores/ui-store";
@@ -14,6 +14,24 @@ const BAR_CLASSES = {
   b: "bg-[rgb(96,96,255)]",
   neutral: "bg-foreground/60",
 } as const;
+
+/** The app's gap-center reticle (the canvas cursor asset), as an icon —
+ * not lucide's circled crosshair. */
+function ReticleIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 32 32"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={3}
+      strokeLinecap="round"
+      className={className}
+      aria-hidden
+    >
+      <path d="M16 2v7M16 23v7M2 16h7M23 16h7" />
+    </svg>
+  );
+}
 
 /** A value with a magnitude bar underneath (the Gigi comp treatment). */
 function ValueCell({
@@ -146,7 +164,7 @@ export function ColorReadout() {
       />
       <ReadoutRow
         sample={hoverColor}
-        icon={<Crosshair className="size-4" aria-hidden />}
+        icon={<ReticleIcon className="size-4" />}
         title="Hovered color"
       />
     </div>
