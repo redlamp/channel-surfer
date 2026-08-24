@@ -217,7 +217,21 @@ export function HexFloat() {
     };
     apply();
     mq.addEventListener("change", apply);
-    return () => mq.removeEventListener("change", apply);
+    // Keep a floating card inside the viewport when the window shrinks —
+    // clamping otherwise only happens during drags and resizes.
+    const onResize = () => {
+      const s = useUiStore.getState();
+      if (s.hexWidget.mode !== "floating") return;
+      const x = clamp(s.hexWidget.x, 4, window.innerWidth - s.hexWidget.size - 16);
+      const y = clamp(s.hexWidget.y, 4, window.innerHeight - s.hexWidget.size - 16);
+      if (x !== s.hexWidget.x || y !== s.hexWidget.y)
+        s.setHexWidget({ x, y });
+    };
+    window.addEventListener("resize", onResize);
+    return () => {
+      mq.removeEventListener("change", apply);
+      window.removeEventListener("resize", onResize);
+    };
   }, []);
 
   if (w.mode !== "floating") return null;
