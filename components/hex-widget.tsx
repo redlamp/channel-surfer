@@ -16,6 +16,26 @@ const DOCK_ZONE_PX = 72;
 const clamp = (v: number, lo: number, hi: number) =>
   Math.min(Math.max(v, lo), hi);
 
+/** The live return-slot element, for real drop-target hit testing. */
+let slotEl: HTMLElement | null = null;
+
+/** Is the pointer over the return slot (with a forgiving margin)? Falls
+ * back to the old top-strip heuristic if the slot isn't mounted yet. */
+function pointerOverSlot(ev: PointerEvent) {
+  if (window.innerWidth < 1280) return false;
+  if (slotEl) {
+    const r = slotEl.getBoundingClientRect();
+    const m = 12;
+    return (
+      ev.clientX >= r.left - m &&
+      ev.clientX <= r.right + m &&
+      ev.clientY >= r.top - m &&
+      ev.clientY <= r.bottom + m
+    );
+  }
+  return ev.clientY < DOCK_ZONE_PX;
+}
+
 /**
  * Drag via window listeners (not element capture): a drag that starts on
  * the docked widget continues seamlessly after the dock unmounts and the
@@ -40,8 +60,7 @@ function beginDrag(e: React.PointerEvent<HTMLElement>) {
       start.moved = true;
       s.setHexDragging(true);
     }
-    const overDock =
-      ev.clientY < DOCK_ZONE_PX && window.innerWidth >= 1280;
+    const overDock = pointerOverSlot(ev);
     if (overDock !== s.hexOverDock) s.setHexOverDock(overDock);
     s.setHexWidget({
       mode: "floating",
@@ -49,10 +68,11 @@ function beginDrag(e: React.PointerEvent<HTMLElement>) {
       y: clamp(start.origY + dy, 4, window.innerHeight - s.hexWidget.size - 16),
     });
   };
-  const up = (ev: PointerEvent) => {
+  const up = () => {
     window.removeEventListener("pointermove", move);
     window.removeEventListener("pointerup", up);
     const s = useUiStore.getState();
+    const wasOverDock = s.hexOverDock;
     s.setHexDragging(false);
     s.setHexOverDock(false);
     if (!start.moved) {
@@ -62,12 +82,8 @@ function beginDrag(e: React.PointerEvent<HTMLElement>) {
         s.setHexWidget({
           size: s.hexWidget.size < (SIZE_A + SIZE_B) / 2 ? SIZE_B : SIZE_A,
         });
-    } else if (
-      s.hexWidget.mode === "floating" &&
-      ev.clientY < DOCK_ZONE_PX &&
-      window.innerWidth >= 1280
-    ) {
-      // Dropping it back onto the header zone re-docks it.
+    } else if (s.hexWidget.mode === "floating" && wasOverDock) {
+      // Releasing over the slot re-docks it.
       s.setHexWidget({ mode: "docked" });
     }
   };
@@ -131,6 +147,9 @@ export function HexDock() {
     return (
       <button
         type="button"
+        ref={(el) => {
+          slotEl = el;
+        }}
         aria-label="Return color hex to the header"
         onClick={() => useUiStore.getState().setHexWidget({ mode: "docked" })}
         style={{ width: SIZE_A + 8, height: SIZE_A + 8 }}
