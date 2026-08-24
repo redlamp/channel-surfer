@@ -4,11 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { ImageUp, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import {
-  DEMO_ID,
-  useSourceStore,
-  type MediaItem,
-} from "@/stores/source-store";
+import { useSourceStore, type MediaItem } from "@/stores/source-store";
 import {
   formatBytes,
   probeImageDetails,
@@ -91,15 +87,14 @@ function DetailRow({ label, value }: { label: string; value: string }) {
 function SelectionDetails() {
   const currentId = useSourceStore((s) => s.currentId);
   const items = useSourceStore((s) => s.items);
-  const demoBlob = useSourceStore((s) => s.demoBlob);
+  const demoItems = useSourceStore((s) => s.demoItems);
   const name = useSourceStore((s) => s.name);
   const width = useSourceStore((s) => s.width);
   const height = useSourceStore((s) => s.height);
 
   const blob =
-    currentId === DEMO_ID
-      ? demoBlob
-      : (items.find((i) => i.id === currentId)?.blob ?? null);
+    (items.find((i) => i.id === currentId) ??
+      demoItems.find((d) => d.id === currentId))?.blob ?? null;
   const size = blob?.size ?? null;
 
   // Details arrive async; tagging them with their id lets render discard
@@ -162,12 +157,11 @@ function SelectionDetails() {
  * with header-parsed details for the current selection. */
 export function LibraryPanel() {
   const items = useSourceStore((s) => s.items);
+  const demoItems = useSourceStore((s) => s.demoItems);
   const currentId = useSourceStore((s) => s.currentId);
   const select = useSourceStore((s) => s.select);
   const remove = useSourceStore((s) => s.remove);
-  const resetToDemo = useSourceStore((s) => s.resetToDemo);
   const loadFiles = useSourceStore((s) => s.loadFiles);
-  const demoUrl = useSourceStore((s) => (s.isDemo ? s.url : null));
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   return (
@@ -214,13 +208,16 @@ export function LibraryPanel() {
             onRemove={() => void remove(item.id)}
           />
         ))}
-        <LibraryRow
-          name="SMPTE bars"
-          meta="demo"
-          url={demoUrl ?? `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/demo/smpte-bars.png`}
-          selected={currentId === DEMO_ID}
-          onSelect={resetToDemo}
-        />
+        {demoItems.map((demo) => (
+          <LibraryRow
+            key={demo.id}
+            name={demo.name.replace(" (demo)", "")}
+            meta="demo"
+            url={demo.url}
+            selected={currentId === demo.id}
+            onSelect={() => select(demo.id)}
+          />
+        ))}
         {items.length === 0 && (
           <p className="px-2 py-3 text-base text-muted-foreground">
             Drop images anywhere to build your library.

@@ -8,7 +8,7 @@ import { ColorReadout } from "@/components/color-readout";
 import { ColorSteps } from "@/components/color-steps";
 import { LibraryPanel } from "@/components/library-panel";
 import { SettingsPanel } from "@/components/settings-panel";
-import { DEMO_ID, useSourceStore } from "@/stores/source-store";
+import { useSourceStore } from "@/stores/source-store";
 import { useUiStore } from "@/stores/ui-store";
 
 export function SurferApp() {
@@ -50,16 +50,14 @@ export function SurferApp() {
       e.preventDefault();
       const s = useSourceStore.getState();
       const order = [...s.items.map((i) => i.id)].reverse();
-      order.push(DEMO_ID);
+      order.push(...s.demoItems.map((d) => d.id));
       const idx = Math.max(order.indexOf(s.currentId), 0);
       const next =
         e.key === "PageDown"
           ? Math.min(idx + 1, order.length - 1)
           : Math.max(idx - 1, 0);
       if (next === idx) return;
-      const id = order[next];
-      if (id === DEMO_ID) s.resetToDemo();
-      else s.select(id);
+      s.select(order[next]);
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
