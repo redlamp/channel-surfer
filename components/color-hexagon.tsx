@@ -78,6 +78,70 @@ function stemPoints(sample: SampledColor) {
   return pts;
 }
 
+/** The wheel's field color under a point — hue from angle, saturation
+ * from hexagonal radius — used to fill the stem tip dots the way
+ * color-taylor fills its handles. */
+function fieldColorAt(pt: { x: number; y: number }) {
+  const dx = pt.x - CENTER;
+  const dy = pt.y - CENTER;
+  const r = Math.hypot(dx, dy);
+  if (r < 0.5) return "rgb(255,255,255)";
+  const deg = (Math.atan2(-dy, dx) / DEG + 360) % 360;
+  const [cr, cg, cb] = hsvToRgb255(deg / 360, Math.min(r / hexRadius(deg), 1));
+  return `rgb(${cr},${cg},${cb})`;
+}
+
+/** One stem chain: channel-colored segments plus field-filled tip dots.
+ * The pinned variant renders dashed at half alpha for comparison. */
+function StemChain({
+  sample,
+  ghost,
+}: {
+  sample: SampledColor;
+  ghost?: boolean;
+}) {
+  const pts = stemPoints(sample);
+  return (
+    <g
+      opacity={ghost ? 0.5 : 1}
+      style={
+        ghost
+          ? undefined
+          : { filter: "drop-shadow(0 1px 1.5px rgba(0,0,0,0.5))" }
+      }
+    >
+      {(["r", "g", "b"] as const).map((ch, i) => (
+        <line
+          key={ch}
+          x1={pts[i].x}
+          y1={pts[i].y}
+          x2={pts[i + 1].x}
+          y2={pts[i + 1].y}
+          stroke={CHANNEL_COLOR[ch]}
+          strokeWidth={2}
+          strokeLinecap="round"
+          strokeDasharray={ghost ? "3 3" : undefined}
+        />
+      ))}
+      {(["r", "g", "b"] as const).map(
+        (ch, i) =>
+          sample[ch] > 0 && (
+            <circle
+              key={`${ch}-dot`}
+              cx={pts[i + 1].x}
+              cy={pts[i + 1].y}
+              r={ghost ? 3 : 4}
+              fill={fieldColorAt(pts[i + 1])}
+              stroke={CHANNEL_COLOR[ch]}
+              strokeWidth={2}
+            />
+          ),
+      )}
+      <circle cx={CENTER} cy={CENTER} r={2.5} fill="#ff0000" />
+    </g>
+  );
+}
+
 /** The hexagon wheel with color-taylor's channel-vector stems: red, green,
  * and blue segments chain from the center dot to the sample's position,
  * each tipped with a channel-ringed dot. Rendered inside the hover card
@@ -119,10 +183,7 @@ export function HexagonInner() {
     ctx.putImageData(img, 0, 0);
   }, []);
 
-  const stems = hoverColor ? stemPoints(hoverColor) : null;
-  const pinPos = pinnedColor
-    ? stemPoints(pinnedColor)[3]
-    : null;
+  const pinPos = pinnedColor ? stemPoints(pinnedColor)[3] : null;
 
   return (
     <div className="relative" style={{ width: BOX, height: BOX }}>
@@ -154,6 +215,9 @@ export function HexagonInner() {
         height={BOX}
         viewBox={`0 0 ${BOX} ${BOX}`}
       >
+        {/* Pinned construction chain: dashed, half alpha, under the live
+            stems so the two read as reference vs current. */}
+        {pinnedColor && <StemChain sample={pinnedColor} ghost />}
         {pinPos && (
           <circle
             cx={pinPos.x}
@@ -165,37 +229,7 @@ export function HexagonInner() {
             style={{ filter: "drop-shadow(0 0 1px rgba(0,0,0,0.9))" }}
           />
         )}
-        {stems && (
-          <g style={{ filter: "drop-shadow(0 1px 1.5px rgba(0,0,0,0.5))" }}>
-            {(["r", "g", "b"] as const).map((ch, i) => (
-              <line
-                key={ch}
-                x1={stems[i].x}
-                y1={stems[i].y}
-                x2={stems[i + 1].x}
-                y2={stems[i + 1].y}
-                stroke={CHANNEL_COLOR[ch]}
-                strokeWidth={2}
-                strokeLinecap="round"
-              />
-            ))}
-            {(["r", "g", "b"] as const).map(
-              (ch, i) =>
-                (hoverColor as SampledColor)[ch] > 0 && (
-                  <circle
-                    key={`${ch}-dot`}
-                    cx={stems[i + 1].x}
-                    cy={stems[i + 1].y}
-                    r={4}
-                    fill="transparent"
-                    stroke={CHANNEL_COLOR[ch]}
-                    strokeWidth={2}
-                  />
-                ),
-            )}
-            <circle cx={CENTER} cy={CENTER} r={2.5} fill="#ff0000" />
-          </g>
-        )}
+        {hoverColor && <StemChain sample={hoverColor} />}
       </svg>
     </div>
   );

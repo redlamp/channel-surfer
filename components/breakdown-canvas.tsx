@@ -453,8 +453,17 @@ function BreakdownScene({
         const fitsAbove = y0 - gap - chh >= 8;
         // Locked per tile: the target only changes when the hovered tile
         // (or the camera) does, so the card sits still within a tile and
-        // tweens between spots as focus moves.
-        if (fitsRight || fitsLeft) {
+        // tweens between spots as focus moves. Edge columns prefer their
+        // outward side so the card leaves the tiled area entirely when
+        // the letterbox space allows.
+        const col = (tile as number) % 3;
+        if (col === 0 && fitsLeft) {
+          gx = x0 - gap - cw;
+          gy = clampY((y0 + y1) / 2 - chh / 2);
+        } else if (col === 2 && fitsRight) {
+          gx = x1 + gap;
+          gy = clampY((y0 + y1) / 2 - chh / 2);
+        } else if (fitsRight || fitsLeft) {
           gx =
             fitsRight && (!fitsLeft || sw - x1 >= x0)
               ? x1 + gap
