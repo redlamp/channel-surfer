@@ -33,7 +33,10 @@ export function DisplayToolbar() {
           ]}
         />
       </div>
-      <div className="flex items-center gap-2">
+      {/* relative + an absolutely placed hint: the resolved-gamma note
+          sits beside the control without joining the layout, so the
+          toggles stay put whether or not Auto is selected. */}
+      <div className="relative flex items-center gap-2">
         <span className="font-mono text-base text-muted-foreground">Gamma</span>
         <Segmented
           size="sm"
@@ -59,7 +62,7 @@ export function DisplayToolbar() {
           ]}
         />
         {colorMath === "auto" && (
-          <span className="font-mono text-base text-muted-foreground">
+          <span className="pointer-events-none absolute left-full ml-2 whitespace-nowrap font-mono text-base text-muted-foreground">
             → {resolved === "srgb" ? "sRGB" : "Linear"}
           </span>
         )}
