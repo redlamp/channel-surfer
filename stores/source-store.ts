@@ -17,7 +17,7 @@ const BASE = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
  * WebP — pixel-identical to the PNG originals, ~38% smaller). First is
  * the default. */
 const DEMO_DEFS = [
-  { id: "demo", file: "smpte-bars.png", name: "SMPTE bars" },
+  { id: "demo", file: "smpte-bars.webp", name: "SMPTE bars" },
   { id: "demo-linear-rainbow", file: "linear-rainbow.webp", name: "Linear Rainbow" },
   { id: "demo-radial-rainbow", file: "radial-rainbow.webp", name: "Radial Rainbow" },
 ];
