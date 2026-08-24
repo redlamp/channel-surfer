@@ -299,14 +299,14 @@ export function HexagonInner({ labels = true }: { labels?: boolean }) {
         <div
           className="absolute rounded-full"
           style={{
-            left: PAD - 3,
-            top: PAD - 3,
-            width: R * 2 + 6,
-            height: R * 2 + 6,
+            left: PAD - 6,
+            top: PAD - 6,
+            width: R * 2 + 12,
+            height: R * 2 + 12,
             background: ringGradient,
-            mask: "radial-gradient(closest-side, transparent calc(100% - 6px), #000 calc(100% - 5px))",
+            mask: "radial-gradient(closest-side, transparent calc(100% - 12px), #000 calc(100% - 11px))",
             WebkitMask:
-              "radial-gradient(closest-side, transparent calc(100% - 6px), #000 calc(100% - 5px))",
+              "radial-gradient(closest-side, transparent calc(100% - 12px), #000 calc(100% - 11px))",
           }}
         />
       )}
