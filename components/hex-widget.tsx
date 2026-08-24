@@ -127,13 +127,20 @@ export function HexDock() {
         aria-label="Return color hex to the header"
         onClick={() => useUiStore.getState().setHexWidget({ mode: "docked" })}
         className={cn(
-          "aspect-square shrink-0 cursor-pointer select-none self-stretch rounded-lg border-2 border-dashed p-1 text-center font-mono text-base leading-tight transition-colors max-xl:hidden",
+          "flex aspect-square min-w-0 shrink-0 cursor-pointer select-none items-center justify-center self-stretch whitespace-normal rounded-lg border-2 border-dashed p-1 text-center font-mono text-base leading-tight break-words transition-colors max-xl:hidden",
           dragging
             ? "border-ring bg-muted/40 text-foreground"
             : "border-border text-muted-foreground hover:border-ring hover:bg-muted/40 hover:text-foreground",
         )}
       >
-        return color hex
+        <span
+          className={cn(
+            "transition-opacity",
+            dragging ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+          )}
+        >
+          return color hex
+        </span>
       </button>
     );
   }
