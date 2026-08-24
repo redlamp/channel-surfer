@@ -92,7 +92,14 @@ function fieldColorAt(pt: { x: number; y: number }) {
 }
 
 /** One stem chain: channel-colored segments plus field-filled tip dots.
- * The pinned variant renders dashed at half alpha for comparison. */
+ * The pinned variant renders dashed (full alpha) for comparison.
+ *
+ * Zero-value channels: the SEGMENT is skipped (a zero-length round-cap
+ * line still paints a blob), but the DOT always renders — it just sits
+ * on the previous joint. Keeping the dots unconditional stops them
+ * popping in and out of the tree as a channel crosses zero, which read
+ * as a sort/visibility glitch.
+ */
 function StemChain({
   sample,
   ghost,
@@ -103,40 +110,39 @@ function StemChain({
   const pts = stemPoints(sample);
   return (
     <g
-      opacity={ghost ? 0.5 : 1}
       style={
         ghost
           ? undefined
           : { filter: "drop-shadow(0 1px 1.5px rgba(0,0,0,0.5))" }
       }
     >
-      {(["r", "g", "b"] as const).map((ch, i) => (
-        <line
-          key={ch}
-          x1={pts[i].x}
-          y1={pts[i].y}
-          x2={pts[i + 1].x}
-          y2={pts[i + 1].y}
-          stroke={CHANNEL_COLOR[ch]}
-          strokeWidth={2}
-          strokeLinecap="round"
-          strokeDasharray={ghost ? "3 3" : undefined}
-        />
-      ))}
       {(["r", "g", "b"] as const).map(
         (ch, i) =>
           sample[ch] > 0 && (
-            <circle
-              key={`${ch}-dot`}
-              cx={pts[i + 1].x}
-              cy={pts[i + 1].y}
-              r={ghost ? 3 : 4}
-              fill={fieldColorAt(pts[i + 1])}
+            <line
+              key={ch}
+              x1={pts[i].x}
+              y1={pts[i].y}
+              x2={pts[i + 1].x}
+              y2={pts[i + 1].y}
               stroke={CHANNEL_COLOR[ch]}
               strokeWidth={2}
+              strokeLinecap="round"
+              strokeDasharray={ghost ? "3 3" : undefined}
             />
           ),
       )}
+      {(["r", "g", "b"] as const).map((ch, i) => (
+        <circle
+          key={`${ch}-dot`}
+          cx={pts[i + 1].x}
+          cy={pts[i + 1].y}
+          r={ghost ? 3 : 4}
+          fill={fieldColorAt(pts[i + 1])}
+          stroke={CHANNEL_COLOR[ch]}
+          strokeWidth={2}
+        />
+      ))}
       <circle cx={CENTER} cy={CENTER} r={2.5} fill="#ff0000" />
     </g>
   );
@@ -215,8 +221,8 @@ export function HexagonInner() {
         height={BOX}
         viewBox={`0 0 ${BOX} ${BOX}`}
       >
-        {/* Pinned construction chain: dashed, half alpha, under the live
-            stems so the two read as reference vs current. */}
+        {/* Pinned construction chain: dashed, under the live stems so the
+            two read as reference vs current. */}
         {pinnedColor && <StemChain sample={pinnedColor} ghost />}
         {pinPos && (
           <circle
