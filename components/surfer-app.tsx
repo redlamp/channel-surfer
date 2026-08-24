@@ -4,8 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import { Download, LibraryBig, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BreakdownCanvas } from "@/components/breakdown-canvas";
-import { HexagonMini } from "@/components/color-hexagon";
 import { ColorReadout } from "@/components/color-readout";
+import { HexDock, HexFloat } from "@/components/hex-widget";
 import { ColorSteps } from "@/components/color-steps";
 import { LibraryPanel } from "@/components/library-panel";
 import { SettingsPanel } from "@/components/settings-panel";
@@ -80,30 +80,27 @@ export function SurferApp() {
         handleFiles(e.dataTransfer.files);
       }}
     >
-      {/* Crowding: subtitle hides first (<lg). Below md the header goes
-          compact-mobile: logo + icon-only buttons on one row, pickers on
-          the next, and the hexagon floats over the display area instead
-          of living in the header. */}
-      <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border px-4 py-3 md:px-6">
-        <div className="min-w-0 md:flex-1 md:basis-0">
+      {/* Crowding: subtitle hides first (<1440px), then the header snaps
+          to the compact layout below xl: logo + icon-only buttons on one
+          row, Inspector pickers on the next, hexagon floating over the
+          display area instead of docked. */}
+      <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border px-4 py-3 xl:px-6">
+        <div className="min-w-0 xl:flex-1 xl:basis-0">
           <h1 className="font-mono text-xl font-semibold tracking-tight">
             Channel Surfer <span aria-hidden>🏄🌈</span>
           </h1>
-          <p className="text-base text-muted-foreground max-lg:hidden">
+          <p className="text-base text-muted-foreground max-[1440px]:hidden">
             How RGB and HSB channels build an image
           </p>
         </div>
         {/* The Color Inspector: hexagon + hovered/pinned readouts. The
             equal flex-1 side regions keep it truly centered on desktop;
-            on mobile it centers on its own row (hexagon floats over the
-            display instead). */}
-        <div className="flex min-w-0 items-center justify-center gap-3 max-md:order-2 max-md:basis-full">
-          <div className="max-md:hidden">
-            <HexagonMini height={81} />
-          </div>
+            in the compact layout it centers on its own row. */}
+        <div className="flex min-w-0 items-center justify-center gap-3 max-xl:order-2 max-xl:basis-full">
+          <HexDock />
           <ColorReadout />
         </div>
-        <div className="flex shrink-0 items-center justify-end gap-2 max-md:order-1 max-md:ml-auto md:flex-1 md:basis-0">
+        <div className="flex shrink-0 items-center justify-end gap-2 max-xl:order-1 max-xl:ml-auto xl:flex-1 xl:basis-0">
           <Button
             variant="ghost"
             title="Export breakdown as PNG"
@@ -123,7 +120,7 @@ export function SurferApp() {
             aria-label="Export breakdown as PNG"
           >
             <Download aria-hidden />
-            <span className="max-md:hidden">Export</span>
+            <span className="max-xl:hidden">Export</span>
           </Button>
           <Button
             variant="ghost"
@@ -132,7 +129,7 @@ export function SurferApp() {
             onClick={() => setLibraryOpen((v) => !v)}
           >
             <LibraryBig aria-hidden />
-            <span className="max-md:hidden">Media Library</span>
+            <span className="max-xl:hidden">Media Library</span>
           </Button>
           <Button
             variant="ghost"
@@ -157,11 +154,6 @@ export function SurferApp() {
         {settingsOpen && (
           <SettingsPanel onClose={() => setSettingsOpen(false)} />
         )}
-        {/* Mobile: the hexagon floats over the display area so the
-            header stays compact. */}
-        <div className="pointer-events-none absolute right-5 top-5 z-10 rounded-lg border border-border bg-popover/85 p-1 shadow-[var(--shadow-md)] md:hidden">
-          <HexagonMini height={64} />
-        </div>
         {dragging && (
           <div className="pointer-events-none absolute inset-2 z-10 flex items-center justify-center rounded-lg border-2 border-dashed border-primary bg-background/80">
             <p className="text-lg font-medium">Drop images to surf them</p>
@@ -169,6 +161,7 @@ export function SurferApp() {
         )}
       </main>
 
+      <HexFloat />
       <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-4 py-2 md:px-6">
         <p className="text-base text-muted-foreground">
           {error ?? (name ? `${name} — ${width}×${height}` : "Loading…")}
