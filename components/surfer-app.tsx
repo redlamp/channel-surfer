@@ -86,8 +86,19 @@ export function SurferApp() {
           display area instead of docked. */}
       <header className="group flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border px-4 py-3 xl:px-6">
         <div className="min-w-0 xl:flex-1 xl:basis-0">
-          <h1 className="font-mono text-xl font-semibold tracking-tight">
-            Channel Surfer <span aria-hidden>🏄🌈</span>
+          <h1 className="flex items-center gap-2 font-mono text-xl font-semibold tracking-tight">
+            {/* The app mark stands in for the emoji the title used to
+                carry; next/image is off under static export, so this is
+                a plain img against the same file the favicon uses. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/favicon-32.png`}
+              alt=""
+              width={28}
+              height={28}
+              className="size-7 shrink-0 rounded-[6px]"
+            />
+            Channel Surfer
           </h1>
           <p className="text-base text-muted-foreground max-[1440px]:hidden">
             How RGB and HSB channels build an image

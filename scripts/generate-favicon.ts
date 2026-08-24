@@ -21,8 +21,24 @@ const icon = (size: number) =>
     .png()
     .toBuffer();
 
+/**
+ * KNOWN GAP — the Apple touch icon wants a full-bleed SQUARE source.
+ * iOS applies its own superellipse mask and composites transparency
+ * onto black, so our pre-rounded corners can show as dark ghosting
+ * outside Apple's curve when the site is added to a home screen.
+ *
+ * Synthesising a square from the rounded art (edge-replication, zoomed
+ * backdrops) smears the silhouette, so this stays a plain downsample
+ * until a radius-0 variant is exported from the Figma frame — then
+ * point `appleSource` at it.
+ */
+const appleSource = source;
+
 await Bun.write("./app/icon.png", await icon(512));
-await Bun.write("./app/apple-icon.png", await icon(180));
+await Bun.write(
+  "./app/apple-icon.png",
+  await sharp(appleSource).resize(180, 180).png().toBuffer(),
+);
 await Bun.write("./public/favicon-32.png", await icon(32));
 
 console.log(
