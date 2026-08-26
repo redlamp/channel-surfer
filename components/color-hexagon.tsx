@@ -4,9 +4,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { rgbToHex, rgbToHsb } from "@/lib/color";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useUiStore, type SampledColor } from "@/stores/ui-store";
-
-/** Tile index of the hue map in the 3x3 grid. */
-const HUE_MAP_TILE = 3;
+import { hueMapTileIndex } from "@/lib/tile-transforms";
 
 /* Twilight ramp constants, matching the shader's linear-light values. */
 const TW_WHITE = [0.92, 0.92, 0.92];
@@ -235,13 +233,17 @@ export function HexagonInner({ labels = true }: { labels?: boolean }) {
   const hoverColor = useUiStore((s) => s.hoverColor);
   const pinnedColor = useUiStore((s) => s.pinnedColor);
   const hoverTile = useUiStore((s) => s.hoverTile);
+  const hueMapTile = hueMapTileIndex(
+    useSettingsStore((s) => s.tileLayout),
+  );
   const highlightMode = useSettingsStore((s) => s.highlightMode);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   // While hovering the hue tile, the ring becomes a twilight legend:
   // white anchored at the current target hue (the hovered pixel's hue
   // when picking is active, 180 deg otherwise).
-  const onHueTile = hoverTile === HUE_MAP_TILE;
+  // The legend ring belongs to whichever tile is carrying the hue map.
+  const onHueTile = hoverTile !== null && hoverTile === hueMapTile;
   const picking =
     highlightMode === "all" || (highlightMode === "tile" && onHueTile);
   let ringTarget = 0.5;

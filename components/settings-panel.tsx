@@ -4,12 +4,28 @@ import { FlaskConical, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Segmented } from "@/components/ui/segmented";
+import { Slider } from "@/components/ui/slider";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   useSettingsStore,
   type ColorModel,
   type HighlightMode,
   type HueMapStyle,
 } from "@/stores/settings-store";
+import {
+  COMPASS,
+  LAYOUT_PRESETS,
+  TILE_TRANSFORMS,
+  TRANSFORM_KEYS,
+  DEFAULT_LAYOUT,
+  type TransformKey,
+} from "@/lib/tile-transforms";
 
 const HIGHLIGHT_OPTIONS: { value: HighlightMode; label: string }[] = [
   { value: "off", label: "Off" },
@@ -30,6 +46,7 @@ const HUE_STYLE_OPTIONS: { value: HueMapStyle; label: string }[] = [
   { value: "crawl", label: "Crawl" },
 ];
 
+
 /**
  * Settings as an inline sidebar, a sibling of the Media Library panel —
  * both can be open side by side, and the canvas stays interactive so
@@ -44,6 +61,13 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
   const setColorModel = useSettingsStore((s) => s.setColorModel);
   const hueMapStyle = useSettingsStore((s) => s.hueMapStyle);
   const setHueMapStyle = useSettingsStore((s) => s.setHueMapStyle);
+  const tileLayout = useSettingsStore((s) => s.tileLayout);
+  const setTileTransform = useSettingsStore((s) => s.setTileTransform);
+  const setTileLayout = useSettingsStore((s) => s.setTileLayout);
+  const midLevel = useSettingsStore((s) => s.midLevel);
+  const setMidLevel = useSettingsStore((s) => s.setMidLevel);
+  const neutralTolerance = useSettingsStore((s) => s.neutralTolerance);
+  const setNeutralTolerance = useSettingsStore((s) => s.setNeutralTolerance);
   const showColorSteps = useSettingsStore((s) => s.showColorSteps);
   const setShowColorSteps = useSettingsStore((s) => s.setShowColorSteps);
   const rgbFloat = useSettingsStore((s) => s.rgbFloat);
@@ -56,7 +80,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
   const setColorMath = useSettingsStore((s) => s.setColorMath);
 
   return (
-    <aside className="flex w-80 shrink-0 flex-col overflow-hidden rounded-md border border-border bg-card shadow-[var(--shadow-sm)]">
+    <aside className="flex w-96 shrink-0 flex-col overflow-hidden rounded-md border border-border bg-card shadow-[var(--shadow-sm)]">
       <div className="flex items-center justify-between border-b border-border px-3 py-2">
         <h2 className="text-base font-semibold">Settings</h2>
         <button
@@ -96,6 +120,126 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
             <p className="text-base text-muted-foreground">
               Twilight is the shipping style; the rest are experiments from
               the hue-direction research.
+            </p>
+          </div>
+        )}
+
+        {labs && (
+          <div className="space-y-2">
+            <Label>
+              <FlaskConical className="size-4" aria-hidden /> Tile effects
+            </Label>
+            <div className="grid grid-cols-3 gap-1">
+              {tileLayout.map((key, i) => (
+                <div
+                  key={COMPASS[i]}
+                  className="flex flex-col gap-0.5 rounded-md border border-border bg-surface-inset p-1"
+                >
+                  <span className="font-mono text-base text-muted-foreground">
+                    {COMPASS[i]}
+                  </span>
+                  <Select
+                    value={key}
+                    onValueChange={(v) =>
+                      setTileTransform(i, v as TransformKey)
+                    }
+                  >
+                    <SelectTrigger
+                      size="sm"
+                      aria-label={`Effect for the ${COMPASS[i]} tile`}
+                      className="w-full min-w-0 border-0 px-1 dark:bg-transparent dark:hover:bg-transparent"
+                    >
+                      <SelectValue>
+                        {(v: string) => (
+                          <span className="truncate">
+                            {TILE_TRANSFORMS[v as TransformKey]?.short ?? v}
+                          </span>
+                        )}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {TRANSFORM_KEYS.map((k) => (
+                        <SelectItem
+                          key={k}
+                          value={k}
+                          title={TILE_TRANSFORMS[k].blurb}
+                        >
+                          {TILE_TRANSFORMS[k].name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {LAYOUT_PRESETS.map((p) => (
+                <Button
+                  key={p.key}
+                  variant="secondary"
+                  className="flex-1"
+                  onClick={() => setTileLayout(p.layout)}
+                >
+                  {p.label}
+                </Button>
+              ))}
+            </div>
+            {tileLayout.includes("mid") && (
+              <div className="space-y-1 pt-1">
+                <div className="flex items-baseline justify-between">
+                  <Label>Mid level</Label>
+                  <span className="font-mono text-base text-muted-foreground">
+                    {Math.round(midLevel * 100)}%
+                  </span>
+                </div>
+                <Slider
+                  min={10}
+                  max={100}
+                  step={1}
+                  value={Math.round(midLevel * 100)}
+                  onValueChange={(v) =>
+                    setMidLevel((typeof v === "number" ? v : v[0]) / 100)
+                  }
+                />
+                <p className="text-base text-muted-foreground">
+                  The brightness every pixel is pinned to. Higher reads
+                  punchier; past ~85% low-saturation areas start blowing out
+                  to white.
+                </p>
+              </div>
+            )}
+            <div className="space-y-1 pt-1">
+              <div className="flex items-baseline justify-between">
+                <Label>Neutral tolerance</Label>
+                <span className="font-mono text-base text-muted-foreground">
+                  {Math.round(neutralTolerance * 255)}/255
+                </span>
+              </div>
+              <Slider
+                min={0}
+                max={24}
+                step={1}
+                value={Math.round(neutralTolerance * 255)}
+                onValueChange={(v) =>
+                  setNeutralTolerance(
+                    (typeof v === "number" ? v : v[0]) / 255,
+                  )
+                }
+              />
+              <p className="text-base text-muted-foreground">
+                Chroma below this counts as grey, so it renders as a neutral
+                instead of a hue. Raise it on noisy JPEGs; 0 shows every
+                pixel&rsquo;s hue, however faint.
+              </p>
+            </div>
+            <p className="text-base text-muted-foreground">
+              Any effect can sit on any tile.{" "}
+              <strong className="font-semibold text-foreground">
+                Factorial
+              </strong>{" "}
+              is source / shaded / lit / flat — every combination of
+              saturation and brightness kept or maxed — which costs the hue
+              map its tile.
             </p>
           </div>
         )}
@@ -206,6 +350,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
             setRgbColorize(true);
             setColorModel("hsb");
             setHueMapStyle("twilight");
+            setTileLayout(DEFAULT_LAYOUT);
             setShowColorSteps(false);
             setRgbFloat(false);
             setShowColorHexagon(false);

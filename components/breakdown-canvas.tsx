@@ -17,6 +17,15 @@ import {
 import { HexagonInner } from "@/components/color-hexagon";
 import { useSourceStore } from "@/stores/source-store";
 import { useSettingsStore } from "@/stores/settings-store";
+import {
+  DEFAULT_LAYOUT,
+  TILE_TRANSFORMS,
+  hueMapTileIndex,
+} from "@/lib/tile-transforms";
+import {
+  TileEffectMenu,
+  type TileMenuState,
+} from "@/components/tile-effect-menu";
 import { canvasBridge, useUiStore } from "@/stores/ui-store";
 import { cn } from "@/lib/utils";
 
@@ -28,7 +37,11 @@ const HUE_STYLE_INDEX = {
   crawl: 4,
 } as const;
 
+
 /** World-space height of the 3x3 grid plane; width is aspect x this. */
+/** Right-button travel (px) still counted as a click, not a pan. */
+const RMB_SLOP = 4;
+
 const PLANE_H = 1;
 const FIT_MARGIN = 0.94;
 /** Framed-tile margin: slivers of the neighbors stay visible so they can
@@ -37,7 +50,6 @@ const FRAME_MARGIN = 0.88;
 /** Resting hue-map target: 180 degrees. */
 const DEFAULT_TARGET_HUE = 0.5;
 /** Tile index of the hue map (row 2, col 1 in the grid). */
-const HUE_MAP_TILE = 3;
 /** Bottom row: the R/G/B channel tiles. */
 const RGB_TILES = [6, 7, 8];
 /** A click that waits this long with no second click is a single click. */
@@ -173,12 +185,25 @@ function BreakdownScene({
   // make sure a change requests the frame that applies it.
   const colorModel = useSettingsStore((s) => s.colorModel);
   const hueMapStyle = useSettingsStore((s) => s.hueMapStyle);
+  const tileLayout = useSettingsStore((s) => s.tileLayout);
+  const midLevel = useSettingsStore((s) => s.midLevel);
+  const neutralTolerance = useSettingsStore((s) => s.neutralTolerance);
   const colorMath = useSettingsStore((s) => s.colorMath);
   const framedTileUi = useUiStore((s) => s.framedTile);
   const isolateUi = useUiStore((s) => s.isolate);
   useEffect(() => {
     invalidate();
-  }, [colorModel, hueMapStyle, colorMath, framedTileUi, isolateUi, invalidate]);
+  }, [
+    colorModel,
+    hueMapStyle,
+    tileLayout,
+    midLevel,
+    neutralTolerance,
+    colorMath,
+    framedTileUi,
+    isolateUi,
+    invalidate,
+  ]);
 
   useEffect(() => {
     hoverTileRef.current = hoverTile;
@@ -312,6 +337,12 @@ function BreakdownScene({
       mat.uniforms.uHoverTile.value = hoverTileRef.current ?? -1;
       const settings = useSettingsStore.getState();
       mat.uniforms.uHueMapStyle.value = HUE_STYLE_INDEX[settings.hueMapStyle];
+      mat.uniforms.uMidLevel.value = settings.midLevel;
+      mat.uniforms.uNeutralTol.value = settings.neutralTolerance;
+      const slots = mat.uniforms.uTileTransform.value as number[];
+      for (let i = 0; i < slots.length; i++) {
+        slots[i] = TILE_TRANSFORMS[settings.tileLayout[i]].id;
+      }
       // Linear <-> sRGB cross-fade, same easing as the model swap.
       // "auto" resolves against whatever the image declares.
       const mathCur = mat.uniforms.uSrgbMath.value as number;
@@ -591,7 +622,9 @@ function BreakdownScene({
     hoverUvRef.current = { u, v };
     const mode = useSettingsStore.getState().highlightMode;
     const picking =
-      mode === "all" || (mode === "tile" && tile === HUE_MAP_TILE);
+      mode === "all" ||
+      (mode === "tile" &&
+        tile === hueMapTileIndex(useSettingsStore.getState().tileLayout));
     const id = imageDataRef.current;
     if (id) {
       const px = Math.min(Math.floor(u * id.width), id.width - 1);
@@ -855,6 +888,11 @@ function BreakdownScene({
             uPeekTile: { value: -1 },
             uColorModel: { value: 0 },
             uHueMapStyle: { value: 0 },
+            uMidLevel: { value: 0.7 },
+            uNeutralTol: { value: 5 / 255 },
+            uTileTransform: {
+              value: DEFAULT_LAYOUT.map((k) => TILE_TRANSFORMS[k].id),
+            },
             uTime: { value: 0 },
             uSrgbMath: { value: 0 },
           }
@@ -893,17 +931,6 @@ function BreakdownScene({
 // Tiles 1 and 2 both push saturation to full; what separates them is
 // whether brightness survives — shaded keeps it, flat discards it. The
 // old "mid/max saturation" names described a difference that isn't there.
-const TILE_NAMES = [
-  "Source",
-  "Hue · shaded",
-  "Hue · flat",
-  "Hue map",
-  "Saturation",
-  "Brightness",
-  "Red",
-  "Green",
-  "Blue",
-];
 
 // Crosshair with a wide center gap so the focused area stays visible
 // while hue-picking; white over a black halo so it reads on any color.
@@ -929,7 +956,14 @@ export function BreakdownCanvas() {
   const setIsolate = useUiStore((s) => s.setIsolate);
   const setCanvasEl = useUiStore((s) => s.setCanvasEl);
   const showColorHexagon = useSettingsStore((s) => s.showColorHexagon);
+  const tileLayout = useSettingsStore((s) => s.tileLayout);
+  const setTileTransform = useSettingsStore((s) => s.setTileTransform);
   const [hoverTile, setHoverTile] = useState<number | null>(null);
+  const [tileMenu, setTileMenu] = useState<TileMenuState | null>(null);
+  // Right-button press origin. A release within RMB_SLOP of it is a
+  // click (open the effect menu); anything further was a camera pan, so
+  // the menu stays shut and MapControls keeps the gesture.
+  const rmbDownRef = useRef<{ x: number; y: number } | null>(null);
   const [cursor, setCursor] = useState<CanvasCursor>("reticle");
 
   if (!url) {
@@ -943,6 +977,8 @@ export function BreakdownCanvas() {
   // While a tile is framed its name stays locked in the title; hover
   // names only show in the zoomed-out grid view.
   const labelTile = framedTile ?? hoverTile;
+  const tileName =
+    labelTile === null ? " " : TILE_TRANSFORMS[tileLayout[labelTile]].name;
 
   return (
     <div
@@ -958,11 +994,29 @@ export function BreakdownCanvas() {
       onContextMenu={(e) => e.preventDefault()}
       // Capture-phase pointer census: a second finger means the gesture
       // belongs to the camera (two-finger pan/pinch), never the pin.
-      onPointerDownCapture={() => {
+      onPointerDownCapture={(e) => {
         canvasBridge.pointerCount += 1;
         if (canvasBridge.pointerCount > 1) canvasBridge.multiTouch = true;
+        if (e.button === 2)
+          rmbDownRef.current = { x: e.clientX, y: e.clientY };
       }}
-      onPointerUpCapture={() => {
+      onPointerUpCapture={(e) => {
+        if (e.button === 2) {
+          const down = rmbDownRef.current;
+          rmbDownRef.current = null;
+          const moved =
+            !down ||
+            Math.hypot(e.clientX - down.x, e.clientY - down.y) > RMB_SLOP;
+          if (!moved && hoverTile !== null) {
+            const r = e.currentTarget.getBoundingClientRect();
+            setTileMenu({
+              x: e.clientX - r.left,
+              y: e.clientY - r.top,
+              tile: hoverTile,
+              current: tileLayout[hoverTile],
+            });
+          }
+        }
         canvasBridge.pointerCount = Math.max(0, canvasBridge.pointerCount - 1);
         if (canvasBridge.pointerCount === 0)
           // Cleared on a delay so the trailing click still sees the flag.
@@ -984,6 +1038,13 @@ export function BreakdownCanvas() {
         canvasBridge.refit?.();
       }}
     >
+      {tileMenu && (
+        <TileEffectMenu
+          state={tileMenu}
+          onPick={setTileTransform}
+          onClose={() => setTileMenu(null)}
+        />
+      )}
       <Canvas
         orthographic
         camera={{ position: [0, 0, 5], zoom: 300, near: 0.1, far: 10 }}
@@ -1037,7 +1098,7 @@ export function BreakdownCanvas() {
         )}
         aria-live="polite"
       >
-        <span>{labelTile !== null ? TILE_NAMES[labelTile] : " "}</span>
+        <span>{tileName}</span>
         {framedTile !== null && (
           <button
             type="button"

@@ -2,6 +2,11 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import {
+  DEFAULT_LAYOUT,
+  normalizeLayout,
+  type TransformKey,
+} from "@/lib/tile-transforms";
 
 /** Where the hue-map hover recalibration listens: nowhere, only on the
  * hue-map tile, or anywhere in the grid. */
@@ -21,12 +26,22 @@ export type ColorMath = "linear" | "srgb";
 /** Hue-map rendering style (see wiki/research/hue-direction-encoding.md). */
 export type HueMapStyle = "warmcool" | "glow" | "twilight" | "diamond" | "crawl";
 
+
+
 interface SettingsState {
   highlightMode: HighlightMode;
   /** RGB channel tiles ("Tint"): false = black-to-white, true = black-to-color. */
   rgbColorize: boolean;
   colorModel: ColorModel;
   hueMapStyle: HueMapStyle;
+  /** Which effect each of the nine grid positions carries, reading order.
+   * The effect library lives in lib/tile-transforms.ts. */
+  tileLayout: TransformKey[];
+  /** Brightness the "mid" effect pins every pixel to, 0-1. */
+  midLevel: number;
+  /** Chroma (max-min) below which a pixel counts as neutral, shared by
+   * every hue-family effect. Stored 0-1; the UI talks in 255ths. */
+  neutralTolerance: number;
   /** Show the color-taylor style hex/HSB derivation steps for the hovered pixel. */
   showColorSteps: boolean;
   /** Readout RGB values as 0.0-1.0 floats instead of 0-255 ints. */
@@ -43,6 +58,12 @@ interface SettingsState {
   setRgbColorize: (on: boolean) => void;
   setColorModel: (model: ColorModel) => void;
   setHueMapStyle: (style: HueMapStyle) => void;
+  /** Hot-swap one tile's effect. */
+  setTileTransform: (index: number, key: TransformKey) => void;
+  /** Load a whole grid at once (a preset, or a reset). */
+  setTileLayout: (layout: readonly TransformKey[]) => void;
+  setMidLevel: (level: number) => void;
+  setNeutralTolerance: (tol: number) => void;
   setShowColorSteps: (on: boolean) => void;
   setRgbFloat: (on: boolean) => void;
   setLabs: (on: boolean) => void;
@@ -57,6 +78,9 @@ export const useSettingsStore = create<SettingsState>()(
       rgbColorize: true,
       colorModel: "hsb",
       hueMapStyle: "twilight",
+      tileLayout: [...DEFAULT_LAYOUT],
+      midLevel: 0.7,
+      neutralTolerance: 5 / 255,
       showColorSteps: false,
       rgbFloat: false,
       labs: false,
@@ -66,6 +90,18 @@ export const useSettingsStore = create<SettingsState>()(
       setRgbColorize: (rgbColorize) => set({ rgbColorize }),
       setColorModel: (colorModel) => set({ colorModel }),
       setHueMapStyle: (hueMapStyle) => set({ hueMapStyle }),
+      setTileTransform: (index, key) =>
+        set((state) => {
+          if (index < 0 || index >= state.tileLayout.length) return state;
+          const tileLayout = [...state.tileLayout];
+          tileLayout[index] = key;
+          return { tileLayout };
+        }),
+      setTileLayout: (layout) => set({ tileLayout: normalizeLayout(layout) }),
+      setMidLevel: (midLevel) =>
+        set({ midLevel: Math.min(Math.max(midLevel, 0), 1) }),
+      setNeutralTolerance: (neutralTolerance) =>
+        set({ neutralTolerance: Math.min(Math.max(neutralTolerance, 0), 0.2) }),
       setShowColorSteps: (showColorSteps) => set({ showColorSteps }),
       setRgbFloat: (rgbFloat) => set({ rgbFloat }),
       setLabs: (labs) => set({ labs }),
@@ -94,6 +130,9 @@ export const useSettingsStore = create<SettingsState>()(
         if (version <= 2) state.hueMapStyle = "twilight";
         if (version <= 3) state.rgbColorize = true;
         if (version <= 5) state.colorMath = "srgb";
+        // Layouts are stored as effect keys, so a retired or renamed
+        // effect falls back to whatever ships in that position.
+        state.tileLayout = normalizeLayout(state.tileLayout);
         return state as SettingsState;
       },
     },
