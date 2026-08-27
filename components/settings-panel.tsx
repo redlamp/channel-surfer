@@ -96,6 +96,7 @@ export function SettingsPanel({
   const setColorMath = useSettingsStore((s) => s.setColorMath);
   const chromaSmooth = useSettingsStore((s) => s.chromaSmooth);
   const setChromaSmooth = useSettingsStore((s) => s.setChromaSmooth);
+  const setWarmCoolShade = useSettingsStore((s) => s.setWarmCoolShade);
 
   return (
     <aside
@@ -444,11 +445,19 @@ export function SettingsPanel({
           variant="secondary"
           className="flex-1"
           onClick={() => {
+            // Everything that changes what the tiles/readouts SHOW.
+            // Panel geometry (width, hexagon size) is workspace
+            // preference and deliberately survives a reset.
             setHighlightMode("tile");
             setRgbColorize(true);
+            setChromaColorize(false);
             setColorModel("hsb");
             setHueMapStyle("twilight");
             setTileLayout(DEFAULT_LAYOUT);
+            setMidLevel(0.7);
+            setNeutralTolerance(5 / 255);
+            setChromaSmooth(false);
+            setWarmCoolShade(true);
             setShowColorSteps(false);
             setRgbFloat(false);
             setShowColorHexagon(false);

@@ -72,6 +72,12 @@ export const canvasBridge = {
   meshDblAt: 0,
   invalidate: null as (() => void) | null,
   refit: null as (() => void) | null,
+  /** The 3x3 grid's current on-screen rect in DEVICE px (clamped to the
+   * canvas), so PNG export can crop to the breakdown instead of the
+   * whole full-bleed canvas with its letterbox and under-chrome areas. */
+  gridScreenRect: null as
+    | (() => { x: number; y: number; w: number; h: number } | null)
+    | null,
   /** The hexagon hover card, positioned per-frame by the scene. */
   hexCardEl: null as HTMLDivElement | null,
   /** Live pointer count over the canvas (capture-phase tracked). */

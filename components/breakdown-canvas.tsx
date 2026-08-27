@@ -798,6 +798,34 @@ function BreakdownScene({
     };
   }, [unframe]);
 
+  // Where the grid sits on the canvas right now, in device px — PNG
+  // export crops to this instead of shipping the letterbox flanks and
+  // the dead space under the header/panel.
+  useEffect(() => {
+    canvasBridge.gridScreenRect = () => {
+      const { camera, size, gl } = get();
+      if (!(camera instanceof THREE.OrthographicCamera)) return null;
+      const dpr = gl.getPixelRatio();
+      const w = aspect * PLANE_H;
+      const h = PLANE_H;
+      const left = ((-w / 2 - camera.position.x) * camera.zoom + size.width / 2) * dpr;
+      const top = ((camera.position.y - h / 2) * camera.zoom + size.height / 2) * dpr;
+      const width = w * camera.zoom * dpr;
+      const height = h * camera.zoom * dpr;
+      // Intersect with the canvas; zoomed in, only the visible part
+      // can be exported.
+      const x0 = Math.max(left, 0);
+      const y0 = Math.max(top, 0);
+      const x1 = Math.min(left + width, size.width * dpr);
+      const y1 = Math.min(top + height, size.height * dpr);
+      if (x1 - x0 < 1 || y1 - y0 < 1) return null;
+      return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+    };
+    return () => {
+      canvasBridge.gridScreenRect = null;
+    };
+  }, [aspect, get]);
+
   // Fit the view when a new image arrives; reads the store imperatively
   // so a window resize never yanks a view the user has panned. Pin and
   // peek state belong to the previous image — clear them. A FRAMED tile
