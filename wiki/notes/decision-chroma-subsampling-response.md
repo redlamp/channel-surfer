@@ -1,10 +1,10 @@
 ---
-tags: [domain/color, status/draft]
+tags: [domain/color, status/adopted]
 ---
 
 # Decision: Detect Chroma Subsampling and Smooth It, Never Reconstruct
 
-**Date:** 2026-08-27 · **Status:** draft (branch `feature/hue-tile-variants`, unmerged)
+**Date:** 2026-08-27 · **Status:** adopted (shipped in v0.3, 2026-08-27)
 
 ## Context
 
