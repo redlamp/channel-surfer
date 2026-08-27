@@ -12,6 +12,11 @@ export interface ImageDetails {
   progressive: boolean | null;
   /** Tagged color space / profile, or the sRGB assumption note. */
   colorSpace: string;
+  /** JPEG chroma subsampling ("4:4:4" | "4:2:2" | "4:2:0" | …), or null
+   * when the format doesn't subsample / doesn't say. Anything other than
+   * 4:4:4 means the file stores colour at reduced resolution — the
+   * source of block artifacts on the hue-family tiles. */
+  chromaSubsampling: string | null;
 }
 
 const UNTAGGED = "Untagged (sRGB assumed)";
@@ -88,6 +93,7 @@ function pngDetails(v: DataView): ImageDetails | null {
     bitDepth,
     progressive: null,
     colorSpace: pngColorSpace(v),
+    chromaSubsampling: null,
   };
 }
 
@@ -109,12 +115,37 @@ function jpegDetails(v: DataView): ImageDetails | null {
             : components === 4
               ? "CMYK"
               : `${components} channels`;
+      // Per-component sampling factors follow (3 bytes each: id,
+      // H<<4|V, quant table). Y's factors relative to Cb's give the
+      // J:a:b subsampling — 4:2:0 stores one colour sample per 2x2
+      // luma pixels.
+      let subsampling: string | null = null;
+      if (components === 3 && offset + 10 + 3 * 3 <= v.byteLength) {
+        const samp = (i: number) => v.getUint8(offset + 10 + i * 3 + 1);
+        const y = samp(0);
+        const cb = samp(1);
+        const rh = (y >> 4) / (cb >> 4 || 1);
+        const rv = (y & 0xf) / (cb & 0xf || 1);
+        subsampling =
+          rh === 1 && rv === 1
+            ? "4:4:4"
+            : rh === 2 && rv === 1
+              ? "4:2:2"
+              : rh === 2 && rv === 2
+                ? "4:2:0"
+                : rh === 1 && rv === 2
+                  ? "4:4:0"
+                  : rh === 4 && rv === 1
+                    ? "4:1:1"
+                    : `${y >> 4}×${y & 0xf} / ${cb >> 4}×${cb & 0xf}`;
+      }
       return {
         format: "JPEG",
         colorMode: mode,
         bitDepth: precision,
         progressive: marker === 0xc2,
         colorSpace: jpegColorSpace(v),
+        chromaSubsampling: subsampling,
       };
     }
     offset += 2 + v.getUint16(offset + 2);
@@ -125,6 +156,7 @@ function jpegDetails(v: DataView): ImageDetails | null {
     bitDepth: null,
     progressive: null,
     colorSpace: jpegColorSpace(v),
+    chromaSubsampling: null,
   };
 }
 
@@ -148,6 +180,7 @@ function riffDetails(v: DataView): ImageDetails | null {
     bitDepth: 8,
     progressive: null,
     colorSpace: hasIcc ? "ICC profile embedded" : UNTAGGED,
+    chromaSubsampling: null,
   };
 }
 
@@ -159,6 +192,7 @@ function gifDetails(v: DataView): ImageDetails | null {
     bitDepth: 8,
     progressive: null,
     colorSpace: UNTAGGED,
+    chromaSubsampling: null,
   };
 }
 
@@ -175,6 +209,7 @@ export async function probeImageDetails(blob: Blob): Promise<ImageDetails> {
     bitDepth: null,
     progressive: null,
     colorSpace: UNTAGGED,
+    chromaSubsampling: null,
   };
 }
 

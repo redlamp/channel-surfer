@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import {
   COMPASS,
   TILE_TRANSFORMS,
-  TRANSFORM_KEYS,
+  TRANSFORM_MENU,
   type TransformKey,
 } from "@/lib/tile-transforms";
 
@@ -82,34 +82,54 @@ export function TileEffectMenu({
       <div className="px-3 py-1 font-mono text-base text-muted-foreground">
         {COMPASS[state.tile]} tile
       </div>
-      {TRANSFORM_KEYS.map((k) => {
-        const active = k === state.current;
-        return (
-          <button
-            key={k}
-            type="button"
-            role="menuitemradio"
-            aria-checked={active}
-            title={TILE_TRANSFORMS[k].blurb}
-            onClick={() => {
-              onPick(state.tile, k);
-              onClose();
-            }}
-            className={cn(
-              "flex w-full cursor-pointer items-center gap-2 px-3 py-1 text-left text-base transition-colors",
-              active
-                ? "bg-primary text-primary-foreground"
-                : "text-foreground hover:bg-surface-inset",
-            )}
-          >
-            <Check
-              className={cn("size-4 shrink-0", active ? "" : "opacity-0")}
-              aria-hidden
-            />
-            {TILE_TRANSFORMS[k].name}
-          </button>
-        );
-      })}
+      {TRANSFORM_MENU.map((group, gi) => (
+        <div key={group.label ?? "anchor"} role="group" aria-label={group.label ?? undefined}>
+          {gi > 0 && <div className="my-1 h-px bg-border" aria-hidden />}
+          {group.label && (
+            <div className="px-3 pt-1 pb-0.5 font-mono text-sm text-muted-foreground">
+              {group.label}
+            </div>
+          )}
+          {group.runs.map((run, ri) => (
+            <div key={ri}>
+              {/* Shipping-grid effects lead; the rest sit past a thin
+                  inset divider. */}
+              {ri > 0 && <div className="mx-3 my-1 h-px bg-border/60" aria-hidden />}
+              {run.map((k) => {
+                const active = k === state.current;
+                return (
+                  <button
+                    key={k}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={active}
+                    title={TILE_TRANSFORMS[k].blurb}
+                    onClick={() => {
+                      onPick(state.tile, k);
+                      onClose();
+                    }}
+                    className={cn(
+                      "flex w-full cursor-pointer items-center gap-2 px-3 py-1 text-left text-base transition-colors",
+                      active
+                        ? "bg-primary text-primary-foreground"
+                        : "text-foreground hover:bg-surface-inset",
+                    )}
+                  >
+                    <Check
+                      className={cn(
+                        "size-4 shrink-0",
+                        active ? "" : "opacity-0",
+                      )}
+                      aria-hidden
+                    />
+                    {TILE_TRANSFORMS[k].name}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      ))}
     </div>
   );
 }

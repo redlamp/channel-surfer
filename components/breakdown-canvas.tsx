@@ -18,16 +18,27 @@ import { HexagonInner } from "@/components/color-hexagon";
 import { useSourceStore } from "@/stores/source-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import {
-  DEFAULT_LAYOUT,
   TILE_TRANSFORMS,
   hueMapTileIndex,
+  tintGroupOfTile,
+  type TileLayout,
+  type TintGroup,
 } from "@/lib/tile-transforms";
+
 import {
   TileEffectMenu,
   type TileMenuState,
 } from "@/components/tile-effect-menu";
 import { canvasBridge, useUiStore } from "@/stores/ui-store";
 import { cn } from "@/lib/utils";
+
+/** Which context bar the effect at a grid position gets: a Tint bar
+ * (RGB channels or chroma), the warm/cool Shade bar, or none. */
+type BarGroup = TintGroup | "warmcool";
+function barGroupOfTile(layout: TileLayout, tile: number): BarGroup | null {
+  if (layout[tile] === "warmCool") return "warmcool";
+  return tintGroupOfTile(layout, tile);
+}
 
 const HUE_STYLE_INDEX = {
   warmcool: 0,
@@ -51,7 +62,6 @@ const FRAME_MARGIN = 0.88;
 const DEFAULT_TARGET_HUE = 0.5;
 /** Tile index of the hue map (row 2, col 1 in the grid). */
 /** Bottom row: the R/G/B channel tiles. */
-const RGB_TILES = [6, 7, 8];
 /** A click that waits this long with no second click is a single click. */
 const CLICK_DELAY_MS = 250;
 /** How long the tint bar survives the cursor crossing the gap to reach it. */
@@ -63,11 +73,31 @@ interface ViewGoal {
   zoom: number;
 }
 
-function fitAllZoom(size: { width: number; height: number }, aspect: number) {
+/** Overlay chrome the fit should avoid (header, open panel). */
+type ViewInsets = { top: number; right: number };
+
+function fitAllZoom(
+  size: { width: number; height: number },
+  aspect: number,
+  insets: ViewInsets,
+) {
   return (
-    Math.min(size.width / (aspect * PLANE_H), size.height / PLANE_H) *
-    FIT_MARGIN
+    Math.min(
+      (size.width - insets.right) / (aspect * PLANE_H),
+      (size.height - insets.top) / PLANE_H,
+    ) * FIT_MARGIN
   );
+}
+
+/** Camera position that centers world point (cx, cy) in the region the
+ * chrome leaves clear. Screen +y is down and world +y is up, so both
+ * offsets ADD: the camera looks above-right of the content, pushing it
+ * down-left on screen, out from under the header and panel. */
+function insetCenter(cx: number, cy: number, zoom: number, insets: ViewInsets) {
+  return {
+    x: cx + insets.right / (2 * zoom),
+    y: cy + insets.top / (2 * zoom),
+  };
 }
 
 /** Center and size of a tile (0..8, row-major from top-left) in world units. */
@@ -104,14 +134,15 @@ function srgbToLinear(c8: number) {
  * light by default, raw sRGB when the Color math setting says so); null
  * for greys. */
 function pixelHue(
-  data: Uint8ClampedArray,
-  i: number,
+  r8: number,
+  g8: number,
+  b8: number,
   linear: boolean,
 ): number | null {
   const cv = (v: number) => (linear ? srgbToLinear(v) : v / 255);
-  const r = cv(data[i]);
-  const g = cv(data[i + 1]);
-  const b = cv(data[i + 2]);
+  const r = cv(r8);
+  const g = cv(g8);
+  const b = cv(b8);
   const max = Math.max(r, g, b);
   const min = Math.min(r, g, b);
   const diff = max - min;
@@ -127,30 +158,46 @@ function pixelHue(
 type CanvasCursor = "reticle" | "grabbing" | "hidden";
 
 function BreakdownScene({
-  url,
-  aspect,
+  blob,
   hoverTile,
   onHoverTile,
   onCursor,
+  onDecoding,
 }: {
-  url: string;
-  aspect: number;
+  blob: Blob;
   hoverTile: number | null;
   onHoverTile: (tile: number | null) => void;
   onCursor: (cursor: CanvasCursor) => void;
+  onDecoding: (busy: boolean) => void;
 }) {
   const get = useThree((s) => s.get);
   const invalidate = useThree((s) => s.invalidate);
   const controls = useThree((s) => s.controls);
 
-  const [texture, setTexture] = useState<THREE.Texture | null>(null);
+  // The committed image: texture and aspect swap in together once a
+  // decode lands, so the previous image (right aspect, live readouts)
+  // stays up for the whole decode instead of a blank or stretched canvas.
+  const [view, setView] = useState<{
+    texture: THREE.Texture;
+    aspect: number;
+  } | null>(null);
+  const texture = view?.texture ?? null;
+  const aspect = view?.aspect ?? 1;
 
   const materialRef = useRef<THREE.ShaderMaterial>(null);
-  const imageDataRef = useRef<ImageData | null>(null);
+  // 2D context over the decoded image for on-demand 1x1 pixel readouts —
+  // NOT a full ImageData copy, which at 30MP would be a ~120MB
+  // main-thread stall for data the readouts touch one pixel at a time.
+  const readCtxRef = useRef<{
+    ctx: CanvasRenderingContext2D;
+    width: number;
+    height: number;
+  } | null>(null);
   const hueGoalRef = useRef(DEFAULT_TARGET_HUE);
   const viewGoalRef = useRef<ViewGoal | null>(null);
   const zoomedTileRef = useRef<number | null>(null);
   const rgbColorizeGoalRef = useRef(0);
+  const chromaColorizeGoalRef = useRef(0);
   const hoverTileRef = useRef<number | null>(null);
   const hoverUvRef = useRef<{ u: number; v: number } | null>(null);
   const pinUvRef = useRef<{ u: number; v: number } | null>(null);
@@ -176,10 +223,12 @@ function BreakdownScene({
   // Settings drive shader behavior: colorize cross-fades via the tween
   // loop, and the hover ref feeds the outline uniform each frame.
   const rgbColorize = useSettingsStore((s) => s.rgbColorize);
+  const chromaColorize = useSettingsStore((s) => s.chromaColorize);
   useEffect(() => {
     rgbColorizeGoalRef.current = rgbColorize ? 1 : 0;
+    chromaColorizeGoalRef.current = chromaColorize ? 1 : 0;
     invalidate();
-  }, [rgbColorize, invalidate]);
+  }, [rgbColorize, chromaColorize, invalidate]);
 
   // Model/style/focus uniforms sync in useFrame; these subscriptions just
   // make sure a change requests the frame that applies it.
@@ -189,6 +238,8 @@ function BreakdownScene({
   const midLevel = useSettingsStore((s) => s.midLevel);
   const neutralTolerance = useSettingsStore((s) => s.neutralTolerance);
   const colorMath = useSettingsStore((s) => s.colorMath);
+  const chromaSmooth = useSettingsStore((s) => s.chromaSmooth);
+  const warmCoolShade = useSettingsStore((s) => s.warmCoolShade);
   const framedTileUi = useUiStore((s) => s.framedTile);
   const isolateUi = useUiStore((s) => s.isolate);
   useEffect(() => {
@@ -200,6 +251,8 @@ function BreakdownScene({
     midLevel,
     neutralTolerance,
     colorMath,
+    chromaSmooth,
+    warmCoolShade,
     framedTileUi,
     isolateUi,
     invalidate,
@@ -218,46 +271,65 @@ function BreakdownScene({
     [],
   );
 
+  // One decode per image, shared by the texture and the pixel readouts.
+  // createImageBitmap decodes off the main thread; the bitmap is drawn
+  // onto one 2D canvas that serves BOTH as the GPU upload source and as
+  // the 1x1 readout surface. (The old path decoded twice — TextureLoader
+  // plus a hidden <img> — and copied the full frame out with
+  // getImageData, which is what made big images take tens of seconds.)
   useEffect(() => {
     let cancelled = false;
-    new THREE.TextureLoader().load(url, (tex) => {
+    onDecoding(true);
+    (async () => {
+      const bmp = await createImageBitmap(blob);
       if (cancelled) {
-        tex.dispose();
+        bmp.close();
         return;
       }
+      const canvas = document.createElement("canvas");
+      canvas.width = bmp.width;
+      canvas.height = bmp.height;
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      if (!ctx) return;
+      ctx.drawImage(bmp, 0, 0);
+
+      // A source over the GPU's texture cap uploads downscaled (readouts
+      // keep the full-res canvas) — otherwise the upload silently fails
+      // on small-cap (typically mobile) GPUs.
+      const maxSize = get().gl.capabilities.maxTextureSize ?? 4096;
+      let texSource: HTMLCanvasElement = canvas;
+      if (Math.max(bmp.width, bmp.height) > maxSize) {
+        const scale = maxSize / Math.max(bmp.width, bmp.height);
+        const scaled = document.createElement("canvas");
+        scaled.width = Math.max(1, Math.round(bmp.width * scale));
+        scaled.height = Math.max(1, Math.round(bmp.height * scale));
+        scaled
+          .getContext("2d")
+          ?.drawImage(bmp, 0, 0, scaled.width, scaled.height);
+        texSource = scaled;
+      }
+      const nextAspect = bmp.width / bmp.height;
+      bmp.close();
+
+      const tex = new THREE.CanvasTexture(texSource);
       // sRGB tag means shader samples arrive linear (the shader converts
       // back to sRGB explicitly at the end, matching the original HLSL).
       tex.colorSpace = THREE.SRGBColorSpace;
       // Nearest magnification: zoomed-in tiles show crisp source pixels.
       tex.magFilter = THREE.NearestFilter;
-      setTexture(tex);
+      // Readouts and texture swap in the same commit so what the cursor
+      // samples always matches what the tiles show.
+      readCtxRef.current = { ctx, width: canvas.width, height: canvas.height };
+      setView({ texture: tex, aspect: nextAspect });
+      onDecoding(false);
+    })().catch((err) => {
+      console.error("Image decode failed", err);
+      if (!cancelled) onDecoding(false);
     });
     return () => {
       cancelled = true;
     };
-  }, [url]);
-
-  // CPU-side copy of the image so pointer moves can read the hovered
-  // pixel without a GPU readback.
-  useEffect(() => {
-    imageDataRef.current = null;
-    let cancelled = false;
-    const img = new Image();
-    img.onload = () => {
-      if (cancelled) return;
-      const c = document.createElement("canvas");
-      c.width = img.naturalWidth;
-      c.height = img.naturalHeight;
-      const ctx = c.getContext("2d", { willReadFrequently: true });
-      if (!ctx) return;
-      ctx.drawImage(img, 0, 0);
-      imageDataRef.current = ctx.getImageData(0, 0, c.width, c.height);
-    };
-    img.src = url;
-    return () => {
-      cancelled = true;
-    };
-  }, [url]);
+  }, [blob, get, onDecoding]);
 
   // Request a demand-mode frame only after the textured mesh has committed;
   // invalidating from the loader callback renders before the mesh exists.
@@ -267,39 +339,13 @@ function BreakdownScene({
     const mat = materialRef.current;
     if (mat) {
       mat.uniforms.uRgbColorize.value = rgbColorizeGoalRef.current;
+      mat.uniforms.uChromaColorize.value = chromaColorizeGoalRef.current;
       mat.uniforms.uColorModel.value =
         useSettingsStore.getState().colorModel === "hsl" ? 1 : 0;
     }
     invalidate();
     return () => texture.dispose();
   }, [texture, invalidate]);
-
-  // Fit the view when a new image arrives; reads the store imperatively so
-  // a window resize never yanks a view the user has panned. Pin, framing,
-  // and peek state belong to the previous image — clear them.
-  useEffect(() => {
-    const { camera, size, controls: ctl } = get();
-    const c = ctl as {
-      target?: THREE.Vector3;
-      saveState?: () => void;
-    } | null;
-    zoomedTileRef.current = null;
-    viewGoalRef.current = null;
-    hueGoalRef.current = DEFAULT_TARGET_HUE;
-    pinUvRef.current = null;
-    peekRef.current = false;
-    const ui = useUiStore.getState();
-    ui.setPinnedColor(null);
-    ui.setFramedTile(null);
-    camera.position.set(0, 0, 5);
-    c?.target?.set(0, 0, 0);
-    if (camera instanceof THREE.OrthographicCamera) {
-      camera.zoom = fitAllZoom(size, aspect);
-      camera.updateProjectionMatrix();
-    }
-    c?.saveState?.();
-    invalidate();
-  }, [aspect, url, get, invalidate]);
 
   // A user grabbing the controls takes over from any in-flight camera
   // tween, and the cursor flips to a grabbing hand for the drag.
@@ -344,7 +390,6 @@ function BreakdownScene({
         slots[i] = TILE_TRANSFORMS[settings.tileLayout[i]].id;
       }
       // Linear <-> sRGB cross-fade, same easing as the model swap.
-      // "auto" resolves against whatever the image declares.
       const mathCur = mat.uniforms.uSrgbMath.value as number;
       const mathGoal = settings.colorMath === "srgb" ? 1 : 0;
       if (Math.abs(mathGoal - mathCur) > 0.002) {
@@ -386,6 +431,7 @@ function BreakdownScene({
       mat.uniforms.uPinUv.value.set(pinUv?.u ?? -1, pinUv?.v ?? -1);
 
       const ui = useUiStore.getState();
+      mat.uniforms.uPinnedTile.value = ui.pinnedTile ?? -1;
       mat.uniforms.uIsolateTile.value =
         ui.isolate && ui.framedTile !== null ? ui.framedTile : -1;
       mat.uniforms.uPeekTile.value =
@@ -395,16 +441,20 @@ function BreakdownScene({
 
       // Constant-rate fade (full sweep in ~350ms) so both directions read
       // at the same speed, unlike an exponential tail.
-      const mixCur = mat.uniforms.uRgbColorize.value as number;
-      const mixGoal = rgbColorizeGoalRef.current;
-      if (mixCur !== mixGoal) {
-        const step = dt / 0.35;
-        mat.uniforms.uRgbColorize.value =
-          mixCur < mixGoal
-            ? Math.min(mixGoal, mixCur + step)
-            : Math.max(mixGoal, mixCur - step);
+      const step = dt / 0.35;
+      const fade = (name: string, goal: number) => {
+        const cur = mat.uniforms[name].value as number;
+        if (cur === goal) return false;
+        mat.uniforms[name].value =
+          cur < goal ? Math.min(goal, cur + step) : Math.max(goal, cur - step);
+        return true;
+      };
+      if (fade("uRgbColorize", rgbColorizeGoalRef.current)) active = true;
+      if (fade("uChromaColorize", chromaColorizeGoalRef.current))
         active = true;
-      }
+      if (fade("uChromaSmooth", settings.chromaSmooth ? 1 : 0)) active = true;
+      if (fade("uWarmCoolShade", settings.warmCoolShade ? 1 : 0))
+        active = true;
     }
 
     const goal = viewGoalRef.current;
@@ -445,13 +495,17 @@ function BreakdownScene({
       useUiStore.getState().setFramedTile(null);
     }
 
-    // Tint bar: pinned below the last hovered RGB tile, with a short grace
+    // Context bar (Tint or warm/cool Shade): pinned below the last
+    // hovered bar-carrying tile, with a short grace
     // window so the cursor can cross the gap onto the bar itself.
     const bar = canvasBridge.tintBarEl;
     if (bar && state.camera instanceof THREE.OrthographicCamera) {
       const rgbHover =
         hoverTileRef.current !== null &&
-        RGB_TILES.includes(hoverTileRef.current);
+        barGroupOfTile(
+          useSettingsStore.getState().tileLayout,
+          hoverTileRef.current,
+        ) !== null;
       if (rgbHover) {
         lastRgbTileRef.current = hoverTileRef.current;
         lastRgbHoverAtRef.current = performance.now();
@@ -568,22 +622,25 @@ function BreakdownScene({
     return Math.hypot((u - pin.u) * pxPerU, (v - pin.v) * pxPerV);
   };
 
-  const setPinAt = (u: number, v: number) => {
-    const id = imageDataRef.current;
-    if (!id) return;
-    const px = Math.min(Math.floor(u * id.width), id.width - 1);
-    const py = Math.min(Math.floor((1 - v) * id.height), id.height - 1);
-    const i = (py * id.width + px) * 4;
+  /** The decoded pixel under an intra-tile UV, read on demand (1x1). */
+  const readPixel = (u: number, v: number) => {
+    const rc = readCtxRef.current;
+    if (!rc) return null;
+    const px = Math.min(Math.floor(u * rc.width), rc.width - 1);
+    const py = Math.min(Math.floor((1 - v) * rc.height), rc.height - 1);
+    const d = rc.ctx.getImageData(px, py, 1, 1).data;
+    return { r: d[0], g: d[1], b: d[2], x: px, y: py };
+  };
+
+  const setPinAt = (tile: number, u: number, v: number) => {
+    const px = readPixel(u, v);
+    if (!px) return;
     pinUvRef.current = { u, v };
-    useUiStore.getState().setPinnedColor({
-      r: id.data[i],
-      g: id.data[i + 1],
-      b: id.data[i + 2],
-      x: px,
-      y: py,
-      u,
-      v,
-    });
+    const ui = useUiStore.getState();
+    ui.setPinnedColor({ ...px, u, v });
+    // Pinning also selects the tile: white outline, and the inspector
+    // falls back to it when nothing is hovered.
+    ui.setPinnedTile(tile);
   };
 
   const onPointerMove = (e: ThreeEvent<PointerEvent>) => {
@@ -614,7 +671,7 @@ function BreakdownScene({
       }
     }
     if (pinDragRef.current) {
-      setPinAt(u, v);
+      setPinAt(tile, u, v);
       invalidate();
       return;
     }
@@ -625,25 +682,15 @@ function BreakdownScene({
       mode === "all" ||
       (mode === "tile" &&
         tile === hueMapTileIndex(useSettingsStore.getState().tileLayout));
-    const id = imageDataRef.current;
-    if (id) {
-      const px = Math.min(Math.floor(u * id.width), id.width - 1);
-      const py = Math.min(Math.floor((1 - v) * id.height), id.height - 1);
-      const i = (py * id.width + px) * 4;
-      useUiStore.getState().setHoverColor({
-        r: id.data[i],
-        g: id.data[i + 1],
-        b: id.data[i + 2],
-        x: px,
-        y: py,
-        u,
-        v,
-      });
+    const px = readPixel(u, v);
+    if (px) {
+      useUiStore.getState().setHoverColor({ ...px, u, v });
       if (picking) {
         // Greys have no hue — hold the current target rather than jumping.
         const h = pixelHue(
-          id.data,
-          i,
+          px.r,
+          px.g,
+          px.b,
           useSettingsStore.getState().colorMath === "linear",
         );
         if (h !== null) hueGoalRef.current = h;
@@ -688,24 +735,29 @@ function BreakdownScene({
   const frameTile = useCallback(
     (tile: number, snap = false) => {
       const { size, camera, controls } = get();
+      const insets = useUiStore.getState().viewInsets;
       zoomedTileRef.current = tile;
       useUiStore.getState().setFramedTile(tile);
       const r = tileRect(tile, aspect);
       const zoom =
-        Math.min(size.width / r.w, size.height / r.h) * FRAME_MARGIN;
+        Math.min(
+          (size.width - insets.right) / r.w,
+          (size.height - insets.top) / r.h,
+        ) * FRAME_MARGIN;
       framedZoomRef.current = zoom;
+      const c = insetCenter(r.cx, r.cy, zoom, insets);
       if (snap && camera instanceof THREE.OrthographicCamera) {
         viewGoalRef.current = null;
-        camera.position.set(r.cx, r.cy, camera.position.z);
+        camera.position.set(c.x, c.y, camera.position.z);
         camera.zoom = zoom;
         camera.updateProjectionMatrix();
         (controls as { target?: THREE.Vector3 } | null)?.target?.set(
-          r.cx,
-          r.cy,
+          c.x,
+          c.y,
           0,
         );
       } else {
-        viewGoalRef.current = { x: r.cx, y: r.cy, zoom };
+        viewGoalRef.current = { x: c.x, y: c.y, zoom };
       }
       invalidate();
     },
@@ -718,15 +770,21 @@ function BreakdownScene({
       peekRef.current = false;
       useUiStore.getState().setFramedTile(null);
       const { size, camera, controls } = get();
-      const zoom = fitAllZoom(size, aspect);
+      const insets = useUiStore.getState().viewInsets;
+      const zoom = fitAllZoom(size, aspect, insets);
+      const c = insetCenter(0, 0, zoom, insets);
       if (snap && camera instanceof THREE.OrthographicCamera) {
         viewGoalRef.current = null;
-        camera.position.set(0, 0, camera.position.z);
+        camera.position.set(c.x, c.y, camera.position.z);
         camera.zoom = zoom;
         camera.updateProjectionMatrix();
-        (controls as { target?: THREE.Vector3 } | null)?.target?.set(0, 0, 0);
+        (controls as { target?: THREE.Vector3 } | null)?.target?.set(
+          c.x,
+          c.y,
+          0,
+        );
       } else {
-        viewGoalRef.current = { x: 0, y: 0, zoom };
+        viewGoalRef.current = { x: c.x, y: c.y, zoom };
       }
       invalidate();
     },
@@ -739,6 +797,47 @@ function BreakdownScene({
       canvasBridge.refit = null;
     };
   }, [unframe]);
+
+  // Fit the view when a new image arrives; reads the store imperatively
+  // so a window resize never yanks a view the user has panned. Pin and
+  // peek state belong to the previous image — clear them. A FRAMED tile
+  // survives the swap: the camera re-frames the same grid position
+  // against the new image's aspect instead of resetting to the full
+  // grid. (Declared below frameTile/unframe — referencing them from an
+  // earlier hook is a TDZ error.)
+  useEffect(() => {
+    const { camera, size, controls: ctl } = get();
+    const c = ctl as {
+      target?: THREE.Vector3;
+      saveState?: () => void;
+    } | null;
+    viewGoalRef.current = null;
+    hueGoalRef.current = DEFAULT_TARGET_HUE;
+    pinUvRef.current = null;
+    peekRef.current = false;
+    const ui = useUiStore.getState();
+    ui.setPinnedColor(null);
+    ui.setPinnedTile(null);
+    const framed = zoomedTileRef.current;
+    if (framed !== null) {
+      // Snap, not tween: the image under the camera changed, so easing
+      // from the old aspect's position would read as a drift.
+      frameTile(framed, true);
+      return;
+    }
+    ui.setFramedTile(null);
+    const insets = ui.viewInsets;
+    const zoom = fitAllZoom(size, aspect, insets);
+    const center = insetCenter(0, 0, zoom, insets);
+    camera.position.set(center.x, center.y, 5);
+    c?.target?.set(center.x, center.y, 0);
+    if (camera instanceof THREE.OrthographicCamera) {
+      camera.zoom = zoom;
+      camera.updateProjectionMatrix();
+    }
+    c?.saveState?.();
+    invalidate();
+  }, [view, get, invalidate, frameTile]);
 
   // Single click pins (or unpins) the color sample. Held briefly so a
   // double-click (framing) doesn't also move the pin.
@@ -786,8 +885,9 @@ function BreakdownScene({
         // Clicking on (or near) the existing pin clears it.
         pinUvRef.current = null;
         useUiStore.getState().setPinnedColor(null);
+        useUiStore.getState().setPinnedTile(null);
       } else {
-        setPinAt(u, v);
+        setPinAt(tile, u, v);
       }
       invalidate();
     }, pinDelay);
@@ -826,6 +926,7 @@ function BreakdownScene({
         } else if (pinUvRef.current) {
           pinUvRef.current = null;
           useUiStore.getState().setPinnedColor(null);
+          useUiStore.getState().setPinnedTile(null);
           invalidate();
         }
         return;
@@ -873,32 +974,47 @@ function BreakdownScene({
   // made R3F re-apply the prop and reset every uniform to its initial
   // value — uRgbColorize snapped to 0 and faded back up, which read as a
   // flicker on the RGB tiles whenever the cursor crossed tiles.
-  const uniforms = useMemo(
-    () =>
-      texture
-        ? {
+  const uniforms = useMemo(() => {
+    if (!texture) return null;
+    // Seed every CPU-eased uniform AT its current goal. A fresh material
+    // (new image, hot reload) otherwise starts each at 0 and eases in,
+    // which reads as a whole-grid flash — most visibly a gamma sweep
+    // that crawls the saturation tile's shadow boundaries.
+    const s = useSettingsStore.getState();
+    return {
             uSource: { value: texture },
+            // One source texel in tile-UV units, for the chroma-smoothing
+            // neighborhood taps.
+            uTexelSize: {
+              value: new THREE.Vector2(
+                1 / (texture.image as HTMLCanvasElement).width,
+                1 / (texture.image as HTMLCanvasElement).height,
+              ),
+            },
+            uChromaSmooth: { value: s.chromaSmooth ? 1 : 0 },
+            uWarmCoolShade: { value: s.warmCoolShade ? 1 : 0 },
             uTargetHue: { value: DEFAULT_TARGET_HUE },
-            uRgbColorize: { value: 0 },
+            uRgbColorize: { value: s.rgbColorize ? 1 : 0 },
+            uChromaColorize: { value: s.chromaColorize ? 1 : 0 },
             uHoverTile: { value: -1 },
+            uPinnedTile: { value: -1 },
             uUvPerPx: { value: new THREE.Vector2() },
             uPinUv: { value: new THREE.Vector2(-1, -1) },
             uHoverUv: { value: new THREE.Vector2(-1, -1) },
             uIsolateTile: { value: -1 },
             uPeekTile: { value: -1 },
-            uColorModel: { value: 0 },
+            uColorModel: { value: s.colorModel === "hsl" ? 1 : 0 },
             uHueMapStyle: { value: 0 },
-            uMidLevel: { value: 0.7 },
-            uNeutralTol: { value: 5 / 255 },
+            uMidLevel: { value: s.midLevel },
+            uNeutralTol: { value: s.neutralTolerance },
             uTileTransform: {
-              value: DEFAULT_LAYOUT.map((k) => TILE_TRANSFORMS[k].id),
+              value: s.tileLayout.map((k) => TILE_TRANSFORMS[k].id),
             },
             uTime: { value: 0 },
-            uSrgbMath: { value: 0 },
-          }
-        : null,
-    [texture],
-  );
+            uSrgbMath: { value: s.colorMath === "srgb" ? 1 : 0 },
+          };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- goal seed only
+  }, [texture]);
 
   if (!texture || !uniforms) return null;
 
@@ -946,11 +1062,11 @@ const RETICLE_CURSOR = `url("data:image/svg+xml,${encodeURIComponent(RETICLE_SVG
  * plane keeps the source image's aspect ratio.
  */
 export function BreakdownCanvas() {
-  const url = useSourceStore((s) => s.url);
-  const width = useSourceStore((s) => s.width);
-  const height = useSourceStore((s) => s.height);
+  const blob = useSourceStore((s) => s.blob);
   const rgbColorize = useSettingsStore((s) => s.rgbColorize);
   const setRgbColorize = useSettingsStore((s) => s.setRgbColorize);
+  const chromaColorize = useSettingsStore((s) => s.chromaColorize);
+  const setChromaColorize = useSettingsStore((s) => s.setChromaColorize);
   const framedTile = useUiStore((s) => s.framedTile);
   const isolate = useUiStore((s) => s.isolate);
   const setIsolate = useUiStore((s) => s.setIsolate);
@@ -965,8 +1081,22 @@ export function BreakdownCanvas() {
   // the menu stays shut and MapControls keeps the gesture.
   const rmbDownRef = useRef<{ x: number; y: number } | null>(null);
   const [cursor, setCursor] = useState<CanvasCursor>("reticle");
+  // The bar drives the control belonging to the tile it is anchored under,
+  // and chroma toggles independently of the RGB channels. Latched, not read
+  // from hoverTile: moving the cursor off the tile and onto the bar clears
+  // the hover, which would otherwise fall back to the RGB control and
+  // toggle the wrong thing.
+  const [barGroup, setBarGroup] = useState<BarGroup | null>(null);
+  const barOn = barGroup === "chroma" ? chromaColorize : rgbColorize;
+  const setBarOn =
+    barGroup === "chroma" ? setChromaColorize : setRgbColorize;
+  const warmCoolShade = useSettingsStore((s) => s.warmCoolShade);
+  const setWarmCoolShade = useSettingsStore((s) => s.setWarmCoolShade);
+  // True while a newly selected image is decoding; the previous image
+  // stays up underneath, so this just badges the wait.
+  const [decoding, setDecoding] = useState(false);
 
-  if (!url) {
+  if (!blob) {
     return (
       <div className="flex h-full w-full items-center justify-center">
         <p className="text-base text-muted-foreground">Loading image…</p>
@@ -982,7 +1112,7 @@ export function BreakdownCanvas() {
 
   return (
     <div
-      className="relative h-full w-full overflow-hidden rounded-md border border-border"
+      className="relative h-full w-full overflow-hidden"
       style={{
         cursor:
           cursor === "hidden"
@@ -1038,6 +1168,15 @@ export function BreakdownCanvas() {
         canvasBridge.refit?.();
       }}
     >
+      {/* Decode badge: the old image stays interactive underneath. */}
+      {decoding && (
+        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
+          <p className="animate-pulse rounded-md border border-border bg-popover/90 px-3 py-1.5 font-mono text-base shadow-[var(--shadow-md)]">
+            Decoding image…
+          </p>
+        </div>
+      )}
+
       {tileMenu && (
         <TileEffectMenu
           state={tileMenu}
@@ -1054,15 +1193,22 @@ export function BreakdownCanvas() {
         onCreated={({ gl }) => setCanvasEl(gl.domElement)}
       >
         <BreakdownScene
-          url={url}
-          aspect={width / height}
+          blob={blob}
           hoverTile={hoverTile}
           onHoverTile={(t) => {
             setHoverTile(t);
             // Mirrored into the UI store for the hexagon's twilight ring.
             useUiStore.getState().setHoverTile(t);
+            if (t !== null) {
+              const g = barGroupOfTile(
+                useSettingsStore.getState().tileLayout,
+                t,
+              );
+              if (g !== null) setBarGroup(g);
+            }
           }}
           onCursor={setCursor}
+          onDecoding={setDecoding}
         />
         <MapControls
           makeDefault
@@ -1092,7 +1238,7 @@ export function BreakdownCanvas() {
           mode, with the isolate (mask) toggle beside it. */}
       <div
         className={cn(
-          "absolute left-1/2 top-3 flex -translate-x-1/2 items-center gap-2 rounded-md border border-border bg-popover/90 px-3 py-1 font-mono text-base shadow-[var(--shadow-md)] transition-opacity duration-150",
+          "absolute left-1/2 top-14 flex -translate-x-1/2 items-center gap-2 rounded-md border border-border bg-popover/90 px-3 py-1 font-mono text-base shadow-[var(--shadow-md)] transition-opacity duration-150",
           labelTile === null ? "opacity-0" : "opacity-100",
           framedTile === null ? "pointer-events-none" : "pointer-events-auto",
         )}
@@ -1133,7 +1279,8 @@ export function BreakdownCanvas() {
         </div>
       )}
 
-      {/* Tint bar: positioned below the hovered RGB tile by the scene. */}
+      {/* Context bar (Tint or warm/cool Shade), positioned below the
+          hovered tile by the scene. */}
       <div
         ref={(el) => {
           canvasBridge.tintBarEl = el;
@@ -1148,31 +1295,58 @@ export function BreakdownCanvas() {
           window.setTimeout(() => canvasBridge.invalidate?.(), 50);
         }}
       >
-        <span className="text-muted-foreground">Tint</span>
-        {(
-          [
-            [false, "White"],
-            [true, "Color"],
-          ] as const
-        ).map(([value, label]) => (
-          <button
-            key={label}
-            type="button"
-            aria-pressed={rgbColorize === value}
-            className={cn(
-              "cursor-pointer rounded-sm px-1.5 transition-colors",
-              rgbColorize === value
-                ? "bg-primary text-primary-foreground"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-            onClick={() => {
-              setRgbColorize(value);
-              canvasBridge.invalidate?.();
-            }}
-          >
-            {label}
-          </button>
-        ))}
+        <span className="text-muted-foreground">
+          {barGroup === "warmcool" ? "Shade" : "Tint"}
+        </span>
+        {barGroup === "warmcool"
+          ? (
+              [
+                [false, "Flat"],
+                [true, "Shaded"],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={label}
+                type="button"
+                aria-pressed={warmCoolShade === value}
+                className={cn(
+                  "cursor-pointer rounded-sm px-1.5 transition-colors",
+                  warmCoolShade === value
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+                onClick={() => {
+                  setWarmCoolShade(value);
+                  canvasBridge.invalidate?.();
+                }}
+              >
+                {label}
+              </button>
+            ))
+          : (
+              [
+                [false, "White"],
+                [true, "Color"],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={label}
+                type="button"
+                aria-pressed={barOn === value}
+                className={cn(
+                  "cursor-pointer rounded-sm px-1.5 transition-colors",
+                  barOn === value
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+                onClick={() => {
+                  setBarOn(value);
+                  canvasBridge.invalidate?.();
+                }}
+              >
+                {label}
+              </button>
+            ))}
       </div>
     </div>
   );

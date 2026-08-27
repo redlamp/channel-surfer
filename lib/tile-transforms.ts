@@ -10,6 +10,9 @@
  * Labs panel) and nothing else.
  */
 
+/** Which Tint control governs an effect. */
+export type TintGroup = "rgb" | "chroma";
+
 export interface TileTransform {
   /** Shader-side id. Stable: the shader switches on this number. */
   id: number;
@@ -21,6 +24,10 @@ export interface TileTransform {
   name: string;
   /** One-liner for the Labs picker. */
   blurb: string;
+  /** Effect renders a magnitude that can be shown bare or tinted. The
+   * group names which Tint control owns it — the RGB channels and chroma
+   * are toggled independently. */
+  tint?: TintGroup;
 }
 
 export const TILE_TRANSFORMS = {
@@ -87,10 +94,11 @@ export const TILE_TRANSFORMS = {
   },
   saturation: { id: 5, short: "Sat", name: "Saturation", blurb: "Saturation as grey" },
   brightness: { id: 6, short: "Bright", name: "Brightness", blurb: "Brightness as grey" },
-  red: { id: 7, short: "Red", name: "Red", blurb: "Red channel" },
-  green: { id: 8, short: "Green", name: "Green", blurb: "Green channel" },
-  blue: { id: 9, short: "Blue", name: "Blue", blurb: "Blue channel" },
+  red: { tint: "rgb", id: 7, short: "Red", name: "Red", blurb: "Red channel" },
+  green: { tint: "rgb", id: 8, short: "Green", name: "Green", blurb: "Green channel" },
+  blue: { tint: "rgb", id: 9, short: "Blue", name: "Blue", blurb: "Blue channel" },
   chroma: {
+    tint: "chroma",
     id: 10,
     short: "Chroma",
     name: "Hue · chroma",
@@ -123,12 +131,14 @@ export const TRANSFORM_KEYS = Object.keys(TILE_TRANSFORMS) as TransformKey[];
 /** Nine grid positions, reading order (row-major from the top-left). */
 export type TileLayout = readonly TransformKey[];
 
-/** The shipping grid. */
+/** The shipping grid (Taylor's 2026-08-27 picks — note the hue map is
+ * no longer part of it; it remains in the library and the HSB vs HSL
+ * preset). */
 export const DEFAULT_LAYOUT: TileLayout = [
   "source",
-  "shaded",
-  "flat",
-  "hueMap",
+  "chroma",
+  "warmCool",
+  "flatSteps",
   "saturation",
   "brightness",
   "red",
@@ -177,6 +187,50 @@ export const LAYOUT_PRESETS: { key: string; label: string; layout: TileLayout }[
     },
   ];
 
+/**
+ * Presentation order for the effect pickers (the right-click menu and
+ * the Settings compass dropdowns): groups in the order the default grid
+ * reads, the effects that ship in that grid leading each group, and the
+ * model-pinned pairs / research pieces trailing after a thin divider.
+ * Spatial memory stays stable — nothing reorders based on use.
+ */
+export interface TransformMenuGroup {
+  /** Group heading, or null for the anchor row (Source). */
+  label: string | null;
+  /** Runs of effects; consecutive runs are split by a thin divider. */
+  runs: TransformKey[][];
+}
+
+export const TRANSFORM_MENU: TransformMenuGroup[] = [
+  { label: null, runs: [["source"]] },
+  {
+    label: "Hue",
+    runs: [
+      ["warmCool", "chroma", "flatSteps"],
+      ["shaded", "flat", "lit", "mid", "families", "contours", "hueMap"],
+    ],
+  },
+  {
+    label: "Saturation / Brightness",
+    runs: [
+      ["saturation", "brightness"],
+      ["satHsb", "satHsl", "valueHsb", "lightHsl"],
+    ],
+  },
+  { label: "RGB", runs: [["red", "green", "blue"]] },
+];
+
+// A registry entry missing from the menu would be unpickable — warn in
+// dev rather than silently hiding it.
+if (process.env.NODE_ENV !== "production") {
+  const menuKeys = TRANSFORM_MENU.flatMap((g) => g.runs.flat());
+  if (
+    menuKeys.length !== TRANSFORM_KEYS.length ||
+    TRANSFORM_KEYS.some((k) => !menuKeys.includes(k))
+  )
+    console.warn("TRANSFORM_MENU is out of sync with TILE_TRANSFORMS");
+}
+
 /** Compass label for a grid position, for UI that names positions. */
 export const COMPASS = [
   "NW",
@@ -200,6 +254,28 @@ export function normalizeLayout(layout: unknown): TransformKey[] {
       ? (k as TransformKey)
       : def;
   });
+}
+
+/** Which Tint control the effect at this grid position answers to, if any. */
+export function tintGroupOfTile(
+  layout: TileLayout,
+  tile: number,
+): TintGroup | null {
+  const key = layout[tile];
+  if (key === undefined) return null;
+  // The `as const` narrows each entry to its literal shape, so entries
+  // without the optional field do not carry the key at all.
+  return (TILE_TRANSFORMS[key] as TileTransform).tint ?? null;
+}
+
+/** Whether any grid position is showing an effect in this tint group. */
+export function layoutHasTintGroup(
+  layout: TileLayout,
+  group: TintGroup,
+): boolean {
+  return layout.some(
+    (k) => (TILE_TRANSFORMS[k] as TileTransform).tint === group,
+  );
 }
 
 /** Grid position currently showing the hue map, or -1. The hover

@@ -50,6 +50,9 @@ interface SourceState {
   currentDetails: ImageDetails | null;
   /** Convenience mirrors of the current selection for the canvas. */
   url: string | null;
+  /** The selection's blob, so the canvas can decode it exactly once
+   * (texture + pixel readouts share the decode). */
+  blob: Blob | null;
   width: number;
   height: number;
   name: string;
@@ -90,6 +93,7 @@ function toItem(rec: MediaRecord): MediaItem {
 function selectionFields(src: MediaItem | null, isDemo: boolean) {
   return {
     url: src?.url ?? null,
+    blob: src?.blob ?? null,
     width: src?.width ?? 1,
     height: src?.height ?? 1,
     name: src?.name ?? "",
@@ -159,6 +163,7 @@ export const useSourceStore = create<SourceState>((set, get) => ({
   currentDetails: null,
   currentId: DEMO_ID,
   url: null,
+  blob: null,
   width: 1,
   height: 1,
   name: "",

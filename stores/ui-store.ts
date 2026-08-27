@@ -21,6 +21,9 @@ interface UiState {
   lastHoverColor: SampledColor | null;
   /** Pinned sample (single pin), survives hover. */
   pinnedColor: SampledColor | null;
+  /** Tile the pin was placed on — pin-selects it: white outline, and
+   * the inspector falls back to it when nothing is hovered. */
+  pinnedTile: number | null;
   /** The WebGL canvas element, for PNG export. */
   canvasEl: HTMLCanvasElement | null;
   /** Tile currently under the cursor, null when not over the grid. */
@@ -41,8 +44,13 @@ interface UiState {
   framedTile: number | null;
   /** Focus-mode isolation: hide the non-focused tiles while framed. */
   isolate: boolean;
+  /** Overlay chrome occluding the display area (header height, open
+   * panel width), in CSS px. Programmatic fits/frames center content in
+   * the unobstructed region; manual panning may go under the chrome. */
+  viewInsets: { top: number; right: number };
   setHoverColor: (c: SampledColor | null) => void;
   setPinnedColor: (c: SampledColor | null) => void;
+  setPinnedTile: (tile: number | null) => void;
   setCanvasEl: (el: HTMLCanvasElement | null) => void;
   setHoverTile: (tile: number | null) => void;
   setFramedTile: (tile: number | null) => void;
@@ -50,6 +58,7 @@ interface UiState {
   setHexWidget: (patch: Partial<UiState["hexWidget"]>) => void;
   setHexDragging: (on: boolean) => void;
   setHexOverDock: (on: boolean) => void;
+  setViewInsets: (insets: { top: number; right: number }) => void;
 }
 
 /**
@@ -76,6 +85,7 @@ export const useUiStore = create<UiState>((set) => ({
   hoverColor: null,
   lastHoverColor: null,
   pinnedColor: null,
+  pinnedTile: null,
   canvasEl: null,
   hoverTile: null,
   framedTile: null,
@@ -83,9 +93,11 @@ export const useUiStore = create<UiState>((set) => ({
   hexWidget: { mode: "docked", size: 81, x: 24, y: 90 },
   hexDragging: false,
   hexOverDock: false,
+  viewInsets: { top: 48, right: 0 },
   setHoverColor: (hoverColor) =>
     set(hoverColor ? { hoverColor, lastHoverColor: hoverColor } : { hoverColor }),
   setPinnedColor: (pinnedColor) => set({ pinnedColor }),
+  setPinnedTile: (pinnedTile) => set({ pinnedTile }),
   setCanvasEl: (canvasEl) => set({ canvasEl }),
   setHoverTile: (hoverTile) => set({ hoverTile }),
   setFramedTile: (framedTile) => set({ framedTile }),
@@ -94,4 +106,5 @@ export const useUiStore = create<UiState>((set) => ({
     set((s) => ({ hexWidget: { ...s.hexWidget, ...patch } })),
   setHexDragging: (hexDragging) => set({ hexDragging }),
   setHexOverDock: (hexOverDock) => set({ hexOverDock }),
+  setViewInsets: (viewInsets) => set({ viewInsets }),
 }));
