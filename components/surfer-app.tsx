@@ -1,38 +1,70 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { Download, LibraryBig, Settings2 } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Download, PanelRightClose, PanelRightOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BreakdownCanvas } from "@/components/breakdown-canvas";
-import { ColorReadout } from "@/components/color-readout";
-import { HexDock, HexFloat } from "@/components/hex-widget";
 import { ColorSteps } from "@/components/color-steps";
 import { DisplayToolbar } from "@/components/display-toolbar";
-import { LibraryPanel } from "@/components/library-panel";
-import { SettingsPanel } from "@/components/settings-panel";
+import { HexFloat } from "@/components/hex-widget";
+import { InspectorPanel, type PanelTab } from "@/components/inspector-panel";
+import { useSettingsStore } from "@/stores/settings-store";
 import { useSourceStore } from "@/stores/source-store";
 import { useUiStore } from "@/stores/ui-store";
 
+/**
+ * The full-bleed shell from the layout redesign: the display area IS
+ * the window; a thin translucent header floats over its top edge, and
+ * the inspector panel (Inspect / Library / Settings tabs) overlays the
+ * right side instead of taking layout space. The old subtitle lives in
+ * the "?" hover card; the old footer's facts moved into the Inspect
+ * tab.
+ */
 export function SurferApp() {
   const name = useSourceStore((s) => s.name);
-  const width = useSourceStore((s) => s.width);
-  const height = useSourceStore((s) => s.height);
   const error = useSourceStore((s) => s.error);
   const hydrate = useSourceStore((s) => s.hydrate);
   const loadFiles = useSourceStore((s) => s.loadFiles);
   const [dragging, setDragging] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [libraryOpen, setLibraryOpen] = useState(false);
+  const [panelOpen, setPanelOpen] = useState(true);
+  const [panelTab, setPanelTab] = useState<PanelTab>("inspect");
+  const panelWidth = useSettingsStore((s) => s.panelWidth);
+  const headerRef = useRef<HTMLElement>(null);
+  // Measured, not assumed: the Model group wraps to a second line on
+  // narrow windows, making the header taller than its one-row 48px.
+  const [headerH, setHeaderH] = useState(48);
 
   useEffect(() => {
     void hydrate();
   }, [hydrate]);
 
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setHeaderH(el.offsetHeight));
+    ro.observe(el);
+    setHeaderH(el.offsetHeight);
+    return () => ro.disconnect();
+  }, []);
+
+  // Programmatic fits/frames center content in the region the chrome
+  // leaves clear: below the header, left of an open panel. Manual
+  // panning may still tuck content under either.
+  useEffect(() => {
+    useUiStore.getState().setViewInsets({
+      top: headerH,
+      right: panelOpen ? panelWidth + 12 : 0,
+    });
+  }, [panelOpen, panelWidth, headerH]);
+
   const handleFiles = useCallback(
     (files: FileList | null) => {
       if (!files || files.length === 0) return;
       // Open the library so freshly added images visibly land somewhere.
-      void loadFiles(Array.from(files)).then(() => setLibraryOpen(true));
+      void loadFiles(Array.from(files)).then(() => {
+        setPanelOpen(true);
+        setPanelTab("library");
+      });
     },
     [loadFiles],
   );
@@ -67,7 +99,7 @@ export function SurferApp() {
 
   return (
     <div
-      className="flex h-dvh flex-col bg-background text-foreground"
+      className="relative h-dvh overflow-hidden bg-background text-foreground"
       onDragOver={(e) => {
         e.preventDefault();
         setDragging(true);
@@ -81,41 +113,66 @@ export function SurferApp() {
         handleFiles(e.dataTransfer.files);
       }}
     >
-      {/* Crowding: subtitle hides first (<1440px), then the header snaps
-          to the compact layout below xl: logo + icon-only buttons on one
-          row, Inspector pickers on the next, hexagon floating over the
-          display area instead of docked. */}
-      <header className="group flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border px-4 py-3 xl:px-6">
-        <div className="min-w-0 xl:flex-1 xl:basis-0">
-          <h1 className="flex items-center gap-2 font-mono text-xl font-semibold tracking-tight">
-            {/* The app mark stands in for the emoji the title used to
-                carry. Square master + CSS radius, so the corner curve is
-                a style decision here rather than baked into the asset;
-                next/image is off under static export, hence a plain img. */}
+      {/* The display area fills the window; overlays float above it. */}
+      <div className="absolute inset-0">
+        <BreakdownCanvas />
+      </div>
+
+      <header
+        ref={headerRef}
+        className="absolute inset-x-0 top-0 z-20 flex min-h-12 flex-wrap items-center gap-x-4 gap-y-1 border-b border-border bg-background/70 px-4 py-1.5 backdrop-blur-md"
+      >
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <h1 className="flex items-center gap-2 font-mono text-xl leading-none font-semibold tracking-tight">
+            {/* Mark and wordmark share one height. next/image is off
+                under static export, hence a plain img. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/brand/icon-square.png`}
               alt=""
-              width={28}
-              height={28}
-              className="size-7 shrink-0 rounded-[4px]"
+              width={20}
+              height={20}
+              className="size-5 shrink-0 rounded-[4px]"
             />
             Channel Surfer
           </h1>
-          <p className="text-base text-muted-foreground max-[1440px]:hidden">
-            How RGB and HSB channels build an image
-          </p>
+          {/* The old subtitle, folded into a hover card. */}
+          <div className="group relative ml-1">
+            <button
+              type="button"
+              aria-label="About Channel Surfer"
+              className="flex size-5 cursor-help items-center justify-center rounded-full border border-input font-mono text-sm text-muted-foreground group-hover:bg-muted group-hover:text-foreground"
+            >
+              ?
+            </button>
+            <div className="pointer-events-none absolute top-7 left-0 z-30 hidden w-80 flex-col gap-2 rounded-md border border-border bg-popover/95 p-4 text-base shadow-[var(--shadow-lg)] backdrop-blur-md group-hover:flex">
+              <p className="font-semibold">
+                How RGB and HSB channels build an image
+              </p>
+              <p className="text-muted-foreground">
+                Nine tiles break the picture into its channels — red, green
+                and blue straight from the pixels; hue, saturation and
+                brightness from the color model.
+              </p>
+              <p className="text-muted-foreground">
+                <span className="font-mono text-foreground">HSB</span>
+                {" measures brightness against the strongest channel."}
+              </p>
+              <p className="text-muted-foreground">
+                <span className="font-mono text-foreground">HSL</span>
+                {" measures lightness against the mid-point. Switch models in the Inspector."}
+              </p>
+            </div>
+          </div>
         </div>
-        {/* The Color Inspector: hexagon + hovered/pinned readouts. The
-            equal flex-1 side regions keep it truly centered on desktop;
-            in the compact layout it centers on its own row. */}
-        <div className="flex min-w-0 items-center justify-center gap-3 max-xl:order-2 max-xl:basis-full">
-          <HexDock />
-          <ColorReadout />
+        {/* Wraps to its own line when the window narrows. */}
+        <div className="shrink-0 max-md:order-last max-md:basis-full">
+          <DisplayToolbar />
         </div>
-        <div className="flex shrink-0 items-center justify-end gap-2 max-xl:order-1 max-xl:ml-auto xl:flex-1 xl:basis-0">
+        <div className="flex shrink-0 items-center gap-1">
           <Button
             variant="ghost"
+            size="icon"
             title="Export breakdown as PNG"
             onClick={() => {
               const canvas = useUiStore.getState().canvasEl;
@@ -133,59 +190,51 @@ export function SurferApp() {
             aria-label="Export breakdown as PNG"
           >
             <Download aria-hidden />
-            <span className="max-xl:hidden">Export</span>
           </Button>
-          {/* An open panel keeps its button lit, so the header shows
-              which surfaces are on screen. */}
+          {/* The panel toggle wears the primary fill while open, so the
+              sidebar's presence is legible from the header alone. */}
           <Button
-            variant={libraryOpen ? "secondary" : "ghost"}
-            aria-label="Media Library"
-            aria-pressed={libraryOpen}
-            onClick={() => setLibraryOpen((v) => !v)}
-          >
-            <LibraryBig aria-hidden />
-            <span className="max-xl:hidden">Media Library</span>
-          </Button>
-          <Button
-            variant={settingsOpen ? "secondary" : "ghost"}
+            variant={panelOpen ? "default" : "ghost"}
             size="icon"
-            aria-label="Settings"
-            aria-pressed={settingsOpen}
-            onClick={() => setSettingsOpen((v) => !v)}
+            aria-label={panelOpen ? "Close panel" : "Open panel"}
+            aria-pressed={panelOpen}
+            onClick={() => setPanelOpen((v) => !v)}
           >
-            <Settings2 aria-hidden />
+            {panelOpen ? (
+              <PanelRightClose aria-hidden />
+            ) : (
+              <PanelRightOpen aria-hidden />
+            )}
           </Button>
         </div>
       </header>
 
-      <main className="relative flex min-h-0 flex-1 gap-4 p-4 md:p-6">
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
-          <DisplayToolbar />
-          <div className="min-h-0 flex-1">
-            <BreakdownCanvas />
-          </div>
-          <ColorSteps />
-        </div>
-        {libraryOpen && <LibraryPanel onClose={() => setLibraryOpen(false)} />}
-        {settingsOpen && (
-          <SettingsPanel onClose={() => setSettingsOpen(false)} />
-        )}
-        {dragging && (
-          <div className="pointer-events-none absolute inset-2 z-10 flex items-center justify-center rounded-lg border-2 border-dashed border-primary bg-background/80">
-            <p className="text-lg font-medium">Drop images to surf them</p>
-          </div>
-        )}
-      </main>
+      {panelOpen && (
+        <InspectorPanel
+          tab={panelTab}
+          onTab={setPanelTab}
+          onClose={() => setPanelOpen(false)}
+        />
+      )}
+
+      {/* Color-steps strip (settings-gated) floats along the bottom. */}
+      <div className="absolute inset-x-4 bottom-4 z-10">
+        <ColorSteps />
+      </div>
+
+      {/* Load errors lost their footer; surface them as a chip. */}
+      {error && (
+        <p className="absolute bottom-4 left-4 z-10 rounded-md border border-border bg-popover/90 px-3 py-1.5 text-base text-destructive">
+          {error}
+        </p>
+      )}
 
       <HexFloat />
-      <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-4 py-2 md:px-6">
-        <p className="text-base text-muted-foreground">
-          {error ?? (name ? `${name} — ${width}×${height}` : "Loading…")}
-        </p>
-        <p className="text-base text-muted-foreground">
-          Images stay on your device
-        </p>
-      </footer>
+      {dragging && (
+        <div className="pointer-events-none absolute inset-2 z-30 flex items-center justify-center rounded-lg border-2 border-dashed border-primary bg-background/80">
+          <p className="text-lg font-medium">Drop images to surf them</p>
+        </div>
+      )}
     </div>
   );
 }

@@ -4,15 +4,16 @@ import { useEffect, useMemo, useRef } from "react";
 import { rgbToHex, rgbToHsb } from "@/lib/color";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useUiStore, type SampledColor } from "@/stores/ui-store";
+import { hueMapTileIndex } from "@/lib/tile-transforms";
 
-/** Tile index of the hue map in the 3x3 grid. */
-const HUE_MAP_TILE = 3;
-
-/* Twilight ramp constants, matching the shader's linear-light values. */
+/* Twilight ramp constants, matching the shader's values. */
 const TW_WHITE = [0.92, 0.92, 0.92];
 const TW_BLUE = [0.32, 0.44, 0.76];
 const TW_RED = [0.76, 0.36, 0.31];
 const TW_DARK = [0.11, 0.07, 0.15];
+/* Warm/cool accents, matching imageWarmCool in the shader. */
+const WC_WARM = [0.98, 0.62, 0.25];
+const WC_COOL = [0.3, 0.55, 0.88];
 
 const smoothstep = (a: number, b: number, x: number) => {
   const t = Math.min(Math.max((x - a) / (b - a), 0), 1);
@@ -20,36 +21,63 @@ const smoothstep = (a: number, b: number, x: number) => {
 };
 const mix3 = (a: number[], b: number[], t: number) =>
   a.map((v, i) => v + (b[i] - v) * t);
-const linToSrgb255 = (v: number) =>
-  Math.round(
-    (v <= 0.0031308 ? v * 12.92 : 1.055 * Math.pow(v, 1 / 2.4) - 0.055) * 255,
-  );
+const linToSrgb = (v: number) =>
+  v <= 0.0031308 ? v * 12.92 : 1.055 * Math.pow(v, 1 / 2.4) - 0.055;
+/** Shader constant -> CSS channel. Under sRGB math the tiles use the
+ * constants as raw sRGB values; under linear math they get the output
+ * conversion — mirror that so the ring matches the tile as rendered. */
+const toCss255 = (v: number, srgbMath: boolean) =>
+  Math.round((srgbMath ? v : linToSrgb(v)) * 255);
 
-/** Conic gradient replicating the shader's twilight hue map around the
- * ring: white at the target hue's angle, blue arm CCW, red arm CW, one
- * dark at the antipode. CSS conic runs clockwise from the top, our hue
- * angles run counter-clockwise from the right — hence 90 - deg. */
-function twilightRingGradient(targetHue01: number) {
+/** Shared conic-gradient builder: `colorAt(hue01)` gives the shader-space
+ * color for a hue. CSS conic runs clockwise from the top, our hue angles
+ * run counter-clockwise from the right — hence 90 - deg. */
+function ringGradientFor(
+  colorAt: (hue01: number) => number[],
+  srgbMath: boolean,
+) {
   const stops: string[] = [];
   const N = 48;
   for (let i = 0; i <= N; i++) {
     const cssDeg = (i / N) * 360;
-    const hue01 = (((90 - cssDeg) % 360) + 360) % 360 / 360;
+    const hue01 = ((((90 - cssDeg) % 360) + 360) % 360) / 360;
+    const c = colorAt(hue01);
+    stops.push(
+      `rgb(${toCss255(c[0], srgbMath)},${toCss255(c[1], srgbMath)},${toCss255(c[2], srgbMath)}) ${cssDeg.toFixed(1)}deg`,
+    );
+  }
+  return `conic-gradient(from 0deg, ${stops.join(",")})`;
+}
+
+/** Ring replicating the shader's twilight hue map: white at the target
+ * hue's angle, blue arm CCW, red arm CW, one dark at the antipode. */
+function twilightRingGradient(targetHue01: number, srgbMath: boolean) {
+  return ringGradientFor((hue01) => {
     let sd = (hue01 - targetHue01 + 0.5) % 1;
     if (sd < 0) sd += 1;
     sd -= 0.5;
     const u = Math.min(Math.abs(sd) * 2, 1);
     const arm = sd < 0 ? TW_RED : TW_BLUE;
-    const lin = mix3(
+    return mix3(
       mix3(TW_WHITE, arm, smoothstep(0, 0.5, u)),
       TW_DARK,
       smoothstep(0.5, 1, u),
     );
-    stops.push(
-      `rgb(${linToSrgb255(lin[0])},${linToSrgb255(lin[1])},${linToSrgb255(lin[2])}) ${cssDeg.toFixed(1)}deg`,
-    );
-  }
-  return `conic-gradient(from 0deg, ${stops.join(",")})`;
+  }, srgbMath);
+}
+
+/** Ring replicating imageWarmCool: orange centred on 45°, azure on
+ * 225°, the same smoothstep transition bands (centred on 135° and
+ * 315°) — so the warm/cool split lines up against the hexagon's
+ * R/Y/G/C/B/M corners. No target hue: the axis is fixed. */
+function warmCoolRingGradient(srgbMath: boolean) {
+  return ringGradientFor((hue01) => {
+    let d = (hue01 - 45 / 360 + 0.5) % 1;
+    if (d < 0) d += 1;
+    d = Math.abs(d - 0.5) * 2;
+    const w = 1 - smoothstep(0.35, 0.65, d);
+    return mix3(WC_COOL, WC_WARM, w);
+  }, srgbMath);
 }
 
 /** Header-sized hexagon: the full HexagonInner (labels off) scaled down
@@ -75,7 +103,7 @@ export function HexagonMini({ height = 56 }: { height?: number }) {
           marginTop: -(PAD - VIS_PAD) * s,
         }}
       >
-        <HexagonInner labels={false} />
+        <HexagonInner labels={false} strokeScale={s} />
       </div>
     </div>
   );
@@ -181,9 +209,13 @@ function fieldColorAt(pt: { x: number; y: number }) {
 function StemChain({
   sample,
   ghost,
+  k = 1,
 }: {
   sample: SampledColor;
   ghost?: boolean;
+  /** Inverse of the CSS scale the wheel renders at, so stroke widths
+   * land at a constant on-screen size whatever the hexagon's size. */
+  k?: number;
 }) {
   const pts = stemPoints(sample);
   return (
@@ -206,9 +238,9 @@ function StemChain({
               x2={pts[i + 1].x}
               y2={pts[i + 1].y}
               stroke={CHANNEL_COLOR[ch]}
-              strokeWidth={3}
+              strokeWidth={4 * k}
               strokeLinecap="round"
-              strokeDasharray={ghost ? "4 4" : undefined}
+              strokeDasharray={ghost ? `${4 * k} ${4 * k}` : undefined}
             />
           ),
       )}
@@ -220,7 +252,7 @@ function StemChain({
           r={ghost ? 3.5 : 4.5}
           fill={fieldColorAt(pts[i + 1])}
           stroke={CHANNEL_COLOR[ch]}
-          strokeWidth={3}
+          strokeWidth={3 * k}
         />
       ))}
     </g>
@@ -231,17 +263,34 @@ function StemChain({
  * and blue segments chain from the center dot to the sample's position,
  * each tipped with a channel-ringed dot. Rendered inside the hover card
  * that BreakdownCanvas positions each frame. */
-export function HexagonInner({ labels = true }: { labels?: boolean }) {
+export function HexagonInner({
+  labels = true,
+  strokeScale = 1,
+}: {
+  labels?: boolean;
+  /** CSS scale this wheel renders at; stroke widths compensate so the
+   * stems and the hue hand stay ~4px on screen at any size. */
+  strokeScale?: number;
+}) {
+  const k = 1 / Math.max(strokeScale, 0.05);
   const hoverColor = useUiStore((s) => s.hoverColor);
   const pinnedColor = useUiStore((s) => s.pinnedColor);
   const hoverTile = useUiStore((s) => s.hoverTile);
+  const tileLayout = useSettingsStore((s) => s.tileLayout);
+  const hueMapTile = hueMapTileIndex(tileLayout);
   const highlightMode = useSettingsStore((s) => s.highlightMode);
+  const srgbMath = useSettingsStore((s) => s.colorMath) === "srgb";
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   // While hovering the hue tile, the ring becomes a twilight legend:
   // white anchored at the current target hue (the hovered pixel's hue
   // when picking is active, 180 deg otherwise).
-  const onHueTile = hoverTile === HUE_MAP_TILE;
+  // The legend ring belongs to whichever tile is carrying the hue map.
+  const onHueTile = hoverTile !== null && hoverTile === hueMapTile;
+  // Hovering a warm/cool tile shows its own legend instead: the two
+  // accents around the wheel, so the split lines up against the hex.
+  const onWarmCoolTile =
+    hoverTile !== null && tileLayout[hoverTile] === "warmCool";
   const picking =
     highlightMode === "all" || (highlightMode === "tile" && onHueTile);
   let ringTarget = 0.5;
@@ -251,10 +300,11 @@ export function HexagonInner({ labels = true }: { labels?: boolean }) {
   }
   // Quantize so the gradient string is stable while sweeping one hue area.
   const ringTargetQ = Math.round(ringTarget * 180) / 180;
-  const ringGradient = useMemo(
-    () => (onHueTile ? twilightRingGradient(ringTargetQ) : null),
-    [onHueTile, ringTargetQ],
-  );
+  const ringGradient = useMemo(() => {
+    if (onWarmCoolTile) return warmCoolRingGradient(srgbMath);
+    if (onHueTile) return twilightRingGradient(ringTargetQ, srgbMath);
+    return null;
+  }, [onWarmCoolTile, onHueTile, ringTargetQ, srgbMath]);
 
   // The wheel itself is static — rasterize once at 2x.
   useEffect(() => {
@@ -359,8 +409,8 @@ export function HexagonInner({ labels = true }: { labels?: boolean }) {
                 x2={ex}
                 y2={ey}
                 stroke="#ffffff"
-                strokeWidth={2}
-                strokeDasharray="4 4"
+                strokeWidth={4 * k}
+                strokeDasharray={`${4 * k} ${4 * k}`}
               />
               <circle
                 cx={ex}
@@ -368,7 +418,7 @@ export function HexagonInner({ labels = true }: { labels?: boolean }) {
                 r={7}
                 fill={rgbToHex(active.r, active.g, active.b)}
                 stroke="#ffffff"
-                strokeWidth={2.5}
+                strokeWidth={2.5 * k}
               />
             </g>
           );
@@ -376,7 +426,7 @@ export function HexagonInner({ labels = true }: { labels?: boolean }) {
 
         {/* Pinned construction chain: dashed, under the live stems so the
             two read as reference vs current. */}
-        {pinnedColor && <StemChain sample={pinnedColor} ghost />}
+        {pinnedColor && <StemChain sample={pinnedColor} ghost k={k} />}
         {pinPos && (
           <circle
             cx={pinPos.x}
@@ -384,11 +434,11 @@ export function HexagonInner({ labels = true }: { labels?: boolean }) {
             r={6}
             fill="none"
             stroke="white"
-            strokeWidth={2}
+            strokeWidth={2 * k}
             style={{ filter: "drop-shadow(0 0 1px rgba(0,0,0,0.9))" }}
           />
         )}
-        {hoverColor && <StemChain sample={hoverColor} />}
+        {hoverColor && <StemChain sample={hoverColor} k={k} />}
       </svg>
     </div>
   );

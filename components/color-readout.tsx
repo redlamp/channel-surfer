@@ -33,6 +33,21 @@ function ReticleIcon({ className }: { className?: string }) {
   );
 }
 
+/** The hue/sat/third-channel triple under the active color model. */
+function hsxParts(
+  r: number,
+  g: number,
+  b: number,
+  colorModel: "hsb" | "hsl",
+) {
+  if (colorModel === "hsb") {
+    const { h, s, b: v } = rgbToHsb(r, g, b);
+    return { label: "HSB", h, s, x: v };
+  }
+  const { h, s, l } = rgbToHsl(r, g, b);
+  return { label: "HSL", h, s, x: l };
+}
+
 /** A value with a magnitude bar underneath (the Gigi comp treatment). */
 function ValueCell({
   text,
@@ -90,16 +105,7 @@ function ReadoutRow({
   const fmt = (v: number) =>
     has ? (rgbFloat ? (v / 255).toFixed(3) : String(v)) : "";
   const rgbWidth = rgbFloat ? 5 : 3;
-  const hsx =
-    colorModel === "hsb"
-      ? (() => {
-          const { h, s, b: v } = rgbToHsb(r, g, b);
-          return { label: "HSB", h, s, x: v };
-        })()
-      : (() => {
-          const { h, s, l } = rgbToHsl(r, g, b);
-          return { label: "HSL", h, s, x: l };
-        })();
+  const hsx = hsxParts(r, g, b, colorModel);
 
   return (
     <button
@@ -157,6 +163,136 @@ function ReadoutRow({
         bar="neutral"
       />
     </button>
+  );
+}
+
+/** One sample as a compact vertical block (label, swatch + hex, RGB
+ * row, HSB/HSL row) for the inspector panel's narrow column. */
+function ReadoutStack({
+  sample,
+  icon,
+  label,
+  title,
+}: {
+  sample: SampledColor | null;
+  icon: React.ReactNode;
+  label: string;
+  title: string;
+}) {
+  const colorModel = useSettingsStore((s) => s.colorModel);
+  const rgbFloat = useSettingsStore((s) => s.rgbFloat);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!copied) return;
+    const t = window.setTimeout(() => setCopied(false), 900);
+    return () => window.clearTimeout(t);
+  }, [copied]);
+
+  const has = sample !== null;
+  const { r, g, b } = sample ?? { r: 0, g: 0, b: 0 };
+  const hex = rgbToHex(r, g, b);
+  const fmt = (v: number) =>
+    has ? (rgbFloat ? (v / 255).toFixed(3) : String(v)) : "";
+  // One cell width for every value, RGB and HSB alike, wide enough for
+  // the 0-1 mode's "0.933" — so the two rows and their bars line up.
+  const cellCh = 5;
+  const hsx = hsxParts(r, g, b, colorModel);
+
+  return (
+    <div
+      className={cn(
+        "flex flex-col gap-1 font-mono text-base",
+        has ? "opacity-100" : "opacity-60",
+      )}
+    >
+      <div className="flex items-center gap-2 text-sm tracking-[0.08em] text-muted-foreground">
+        {icon}
+        {label}
+      </div>
+      <button
+        type="button"
+        title={`${title} — copy hex`}
+        disabled={!has}
+        onClick={() => {
+          void navigator.clipboard?.writeText(hex).then(() => setCopied(true));
+        }}
+        className={cn(
+          "flex cursor-pointer items-center gap-2 self-start rounded-md px-1 py-0.5 whitespace-pre transition-colors hover:bg-muted",
+          !has && "pointer-events-none",
+        )}
+      >
+        {/* Rounded RECT, not a circle — a circle reads as the canvas's
+            pin loop; the wider field also shows the color better. */}
+        <span
+          className={cn(
+            "h-5 w-9 shrink-0 rounded-[4px] border",
+            has ? "border-border" : "border-muted-foreground/60",
+          )}
+          style={{ backgroundColor: has ? hex : "transparent" }}
+        />
+        <span className="w-[7ch] text-left">
+          {copied ? (
+            "Copied!"
+          ) : has ? (
+            hex
+          ) : (
+            <span className="text-muted-foreground/70">#</span>
+          )}
+        </span>
+      </button>
+      <div className="flex items-center gap-2 whitespace-pre">
+        <span className="w-[3.5ch] font-bold">RGB</span>
+        <ValueCell text={fmt(r)} frac={has ? r / 255 : 0} widthCh={cellCh} bar="r" />
+        <ValueCell text={fmt(g)} frac={has ? g / 255 : 0} widthCh={cellCh} bar="g" />
+        <ValueCell text={fmt(b)} frac={has ? b / 255 : 0} widthCh={cellCh} bar="b" />
+      </div>
+      <div className="flex items-center gap-2 whitespace-pre">
+        <span className="w-[3.5ch] font-bold">{hsx.label}</span>
+        <ValueCell
+          text={has ? `${hsx.h}°` : ""}
+          frac={has ? hsx.h / 360 : 0}
+          widthCh={cellCh}
+          bar="neutral"
+        />
+        <ValueCell
+          text={has ? `${hsx.s}%` : ""}
+          frac={has ? hsx.s / 100 : 0}
+          widthCh={cellCh}
+          bar="neutral"
+        />
+        <ValueCell
+          text={has ? `${hsx.x}%` : ""}
+          frac={has ? hsx.x / 100 : 0}
+          widthCh={cellCh}
+          bar="neutral"
+        />
+      </div>
+    </div>
+  );
+}
+
+/** Inspector-panel readout: hovered and pinned samples as vertical
+ * blocks sized for the panel's column. */
+export function PanelReadout() {
+  const hoverColor = useUiStore((s) => s.hoverColor);
+  const pinnedColor = useUiStore((s) => s.pinnedColor);
+
+  return (
+    <div className="flex flex-col gap-4">
+      <ReadoutStack
+        sample={hoverColor}
+        icon={<ReticleIcon className="size-4" />}
+        label="HOVERED"
+        title="Hovered color"
+      />
+      <ReadoutStack
+        sample={pinnedColor}
+        icon={<Circle className="size-4" aria-hidden />}
+        label="PINNED"
+        title="Pinned color"
+      />
+    </div>
   );
 }
 
