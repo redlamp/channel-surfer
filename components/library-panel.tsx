@@ -71,16 +71,28 @@ function LibraryRow({
   );
 }
 
-function DetailRow({ label, value }: { label: string; value: string }) {
+function DetailRow({
+  label,
+  value,
+  warn = false,
+}: {
+  label: string;
+  value: string;
+  warn?: boolean;
+}) {
   return (
     <div className="flex items-baseline justify-between gap-3">
       <dt className="text-base text-muted-foreground">{label}</dt>
-      <dd className="text-right font-mono text-base">{value}</dd>
+      <dd className={cn("text-right font-mono text-base", warn && "text-amber-500")}>
+        {value}
+      </dd>
     </div>
   );
 }
 
-function SelectionDetails() {
+/** Header-parsed facts for the current selection; also used by the
+ * inspector panel's Inspect tab. */
+export function SelectionDetails() {
   const currentId = useSourceStore((s) => s.currentId);
   const items = useSourceStore((s) => s.items);
   const demoItems = useSourceStore((s) => s.demoItems);
@@ -123,6 +135,20 @@ function SelectionDetails() {
             value={details.progressive ? "Progressive" : "Baseline"}
           />
         )}
+        {/* Anything other than 4:4:4 stores colour below pixel resolution
+            (e.g. 4:2:0 = one colour sample per 2x2 block) — the cause of
+            block artifacts on the hue/saturation/chroma tiles. */}
+        {details?.chromaSubsampling && (
+          <DetailRow
+            label="Chroma"
+            warn={details.chromaSubsampling !== "4:4:4"}
+            value={
+              details.chromaSubsampling === "4:4:4"
+                ? "4:4:4 (full res)"
+                : `${details.chromaSubsampling} · ½-res colour`
+            }
+          />
+        )}
         {details && <DetailRow label="Color space" value={details.colorSpace} />}
         {size != null && (
           <DetailRow label="File size" value={formatBytes(size)} />
@@ -134,7 +160,15 @@ function SelectionDetails() {
 
 /** Right-side library: every image dropped into the app, plus the demo,
  * with header-parsed details for the current selection. */
-export function LibraryPanel({ onClose }: { onClose: () => void }) {
+export function LibraryPanel({
+  onClose,
+  embedded = false,
+}: {
+  onClose: () => void;
+  /** Rendered inside the inspector panel: the panel shell supplies the
+   * frame and the tab bar stands in for the title/close header. */
+  embedded?: boolean;
+}) {
   const items = useSourceStore((s) => s.items);
   const demoItems = useSourceStore((s) => s.demoItems);
   const currentId = useSourceStore((s) => s.currentId);
@@ -144,23 +178,31 @@ export function LibraryPanel({ onClose }: { onClose: () => void }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   return (
-    <aside className="flex w-72 shrink-0 flex-col overflow-hidden rounded-md border border-border bg-card shadow-[var(--shadow-sm)]">
-      <div className="flex items-center justify-between border-b border-border px-3 py-2">
-        <h2 className="text-base font-semibold">Media Library</h2>
-        <div className="flex items-center gap-2">
-          <span className="font-mono text-base text-muted-foreground">
-            {items.length} {items.length === 1 ? "image" : "images"}
-          </span>
-          <button
-            type="button"
-            aria-label="Close media library"
-            className="cursor-pointer select-none rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-            onClick={onClose}
-          >
-            <X className="size-4" />
-          </button>
+    <aside
+      className={
+        embedded
+          ? "flex min-h-0 w-full flex-1 flex-col overflow-hidden"
+          : "flex w-72 shrink-0 flex-col overflow-hidden rounded-md border border-border bg-card shadow-[var(--shadow-sm)]"
+      }
+    >
+      {!embedded && (
+        <div className="flex items-center justify-between border-b border-border px-3 py-2">
+          <h2 className="text-base font-semibold">Media Library</h2>
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-base text-muted-foreground">
+              {items.length} {items.length === 1 ? "image" : "images"}
+            </span>
+            <button
+              type="button"
+              aria-label="Close media library"
+              className="cursor-pointer select-none rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+              onClick={onClose}
+            >
+              <X className="size-4" />
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="border-b border-border p-1.5">
         <Button

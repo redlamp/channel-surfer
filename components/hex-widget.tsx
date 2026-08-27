@@ -16,12 +16,6 @@ const DOCK_ZONE_PX = 72;
 const clamp = (v: number, lo: number, hi: number) =>
   Math.min(Math.max(v, lo), hi);
 
-/** The dock exists at Tailwind's xl breakpoint. Matching it in rem (not
- * a hard 1280px) keeps the JS checks agreeing with the CSS even when the
- * browser's base font size isn't 16px. */
-const DESKTOP_MQ = "(min-width: 80rem)";
-const isDesktop = () => window.matchMedia(DESKTOP_MQ).matches;
-
 /** Clamp a floating position for a given size. */
 function clampPos(x: number, y: number, size: number) {
   return {
@@ -36,7 +30,6 @@ let slotEl: HTMLElement | null = null;
 /** Is the pointer over the return slot (with a forgiving margin)? Falls
  * back to the old top-strip heuristic if the slot isn't mounted yet. */
 function pointerOverSlot(ev: PointerEvent) {
-  if (!isDesktop()) return false;
   if (slotEl) {
     const r = slotEl.getBoundingClientRect();
     const m = 12;
@@ -174,11 +167,11 @@ function ResizeGrip({ className }: { className?: string }) {
   );
 }
 
-/** The header slot: renders the widget while docked (xl+ only), always
- * at the small header size — sizing is a floating-mode privilege. While
+/** The inspector-panel slot: renders the widget while docked, sized by
+ * the panel — sizing beyond that is a floating-mode privilege. While
  * the widget is floating and mid-drag, the empty slot lights up as a
  * drop target for re-docking. */
-export function HexDock() {
+export function HexDock({ size = SIZE_A }: { size?: number }) {
   const w = useUiStore((s) => s.hexWidget);
   const dragging = useUiStore((s) => s.hexDragging);
   const overDock = useUiStore((s) => s.hexOverDock);
@@ -197,9 +190,9 @@ export function HexDock() {
         }}
         aria-label="Return color hex to the header"
         onClick={() => useUiStore.getState().setHexWidget({ mode: "docked" })}
-        style={{ width: SIZE_A + 8, height: SIZE_A + 8 }}
+        style={{ width: size + 8, height: size + 8 }}
         className={cn(
-          "flex shrink-0 cursor-pointer select-none items-center justify-center whitespace-normal rounded-lg border-2 border-dashed p-1 text-center font-mono text-base leading-tight transition-colors max-xl:hidden",
+          "flex shrink-0 cursor-pointer select-none items-center justify-center whitespace-normal rounded-lg border-2 border-dashed p-1 text-center font-mono text-base leading-tight transition-colors",
           dragging && overDock
             ? "scale-105 border-solid border-ring bg-ring/25 text-foreground"
             : dragging
@@ -220,11 +213,11 @@ export function HexDock() {
   }
   return (
     <div
-      className="shrink-0 cursor-grab touch-none select-none rounded-lg p-1 transition-colors group-hover:bg-muted/70 active:cursor-grabbing max-xl:hidden"
+      className="shrink-0 cursor-grab touch-none select-none rounded-lg p-1 transition-colors group-hover:bg-muted/70 active:cursor-grabbing"
       title="Drag to detach"
       onPointerDown={beginDrag}
     >
-      <HexagonMini height={SIZE_A} />
+      <HexagonMini height={size} />
     </div>
   );
 }
@@ -234,34 +227,9 @@ export function HexFloat() {
   const w = useUiStore((s) => s.hexWidget);
   const dragging = useUiStore((s) => s.hexDragging);
 
-  // Compact-layout screens have no header slot, so the widget must live
-  // as a float there — tracked live via matchMedia, not just at mount,
-  // so window resizes and devtools device mode keep the hexagon visible.
-  // A float we forced is undone when the header slot returns; one the
-  // user dragged out stays where they put it.
+  // The dock now lives in the inspector panel, which exists at every
+  // window width — no compact-layout auto-float needed anymore.
   useEffect(() => {
-    const mq = window.matchMedia(DESKTOP_MQ);
-    let autoFloated = false;
-    const apply = () => {
-      const s = useUiStore.getState();
-      if (!mq.matches) {
-        if (s.hexWidget.mode === "docked") {
-          autoFloated = true;
-          const size = Math.min(s.hexWidget.size, 96);
-          s.setHexWidget({
-            mode: "floating",
-            size,
-            x: Math.max(window.innerWidth - size - 28, 4),
-            y: 100,
-          });
-        }
-      } else if (autoFloated && s.hexWidget.mode === "floating") {
-        autoFloated = false;
-        s.setHexWidget({ mode: "docked" });
-      }
-    };
-    apply();
-    mq.addEventListener("change", apply);
     // Keep a floating card inside the viewport when the window shrinks —
     // clamping otherwise only happens during drags and resizes.
     const onResize = () => {
@@ -274,7 +242,6 @@ export function HexFloat() {
     };
     window.addEventListener("resize", onResize);
     return () => {
-      mq.removeEventListener("change", apply);
       window.removeEventListener("resize", onResize);
     };
   }, []);
