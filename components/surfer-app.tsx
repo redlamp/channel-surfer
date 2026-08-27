@@ -10,7 +10,7 @@ import { HexFloat } from "@/components/hex-widget";
 import { InspectorPanel, type PanelTab } from "@/components/inspector-panel";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useSourceStore } from "@/stores/source-store";
-import { useUiStore } from "@/stores/ui-store";
+import { canvasBridge, useUiStore } from "@/stores/ui-store";
 
 /**
  * The full-bleed shell from the layout redesign: the display area IS
@@ -177,7 +177,7 @@ export function SurferApp() {
             onClick={() => {
               const canvas = useUiStore.getState().canvasEl;
               if (!canvas) return;
-              canvas.toBlob((blob) => {
+              const save = (blob: Blob | null) => {
                 if (!blob) return;
                 const a = document.createElement("a");
                 a.href = URL.createObjectURL(blob);
@@ -185,7 +185,31 @@ export function SurferApp() {
                 a.download = `channel-surfer-${base}.png`;
                 a.click();
                 URL.revokeObjectURL(a.href);
-              });
+              };
+              // Crop to the grid: the full-bleed canvas otherwise ships
+              // its letterbox flanks and under-chrome dead space.
+              const rect = canvasBridge.gridScreenRect?.();
+              if (rect) {
+                const crop = document.createElement("canvas");
+                crop.width = Math.round(rect.w);
+                crop.height = Math.round(rect.h);
+                crop
+                  .getContext("2d")
+                  ?.drawImage(
+                    canvas,
+                    rect.x,
+                    rect.y,
+                    rect.w,
+                    rect.h,
+                    0,
+                    0,
+                    crop.width,
+                    crop.height,
+                  );
+                crop.toBlob(save);
+              } else {
+                canvas.toBlob(save);
+              }
             }}
             aria-label="Export breakdown as PNG"
           >

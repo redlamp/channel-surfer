@@ -174,13 +174,19 @@ function riffDetails(v: DataView): ImageDetails | null {
   // VP8X flags byte: bit 5 marks an embedded ICC profile.
   const hasIcc =
     chunk === "VP8X" && v.byteLength > 20 && (v.getUint8(20) & 0x20) !== 0;
+  // Subsampling is implied by the codec, not declared: lossy WebP is
+  // VP8, which is ALWAYS 4:2:0; lossless VP8L codes full-res RGB. An
+  // extended (VP8X) container would need its inner chunk parsed — left
+  // unknown.
+  const subsampling =
+    chunk === "VP8L" ? "4:4:4" : chunk === "VP8X" ? null : "4:2:0";
   return {
     format: "WebP",
     colorMode: `RGB(A), ${kind}`,
     bitDepth: 8,
     progressive: null,
     colorSpace: hasIcc ? "ICC profile embedded" : UNTAGGED,
-    chromaSubsampling: null,
+    chromaSubsampling: subsampling,
   };
 }
 
