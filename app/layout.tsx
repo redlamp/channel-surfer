@@ -5,6 +5,7 @@ import "@fontsource/barlow/600.css";
 import "@fontsource/barlow/700.css";
 import "@fontsource/share-tech-mono";
 import "./globals.css";
+import { THEME_BOOT_SCRIPT, ThemeSync } from "@/components/theme-sync";
 
 const SITE_URL = `https://redlamp.github.io${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/`;
 
@@ -36,8 +37,17 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className="dark h-full antialiased">
-      <body className="min-h-full flex flex-col">{children}</body>
+    // Dark is the shipped default; the boot script flips the class before
+    // first paint for users who chose light or system, so hydration may
+    // legitimately see a different class than the static HTML carried.
+    <html lang="en" className="dark h-full antialiased" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
+      </head>
+      <body className="min-h-full flex flex-col">
+        <ThemeSync />
+        {children}
+      </body>
     </html>
   );
 }
