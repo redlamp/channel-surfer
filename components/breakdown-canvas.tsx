@@ -15,6 +15,7 @@ import {
   breakdownVertexShader,
 } from "@/lib/shaders/breakdown";
 import { HexagonInner } from "@/components/color-hexagon";
+import { pixelHue } from "@/lib/color";
 import { useSourceStore } from "@/stores/source-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import {
@@ -123,36 +124,6 @@ function tileFromUv(uv: THREE.Vector2) {
     u: uv.x * 3 - gx,
     v: uv.y * 3 - gyFromBottom,
   };
-}
-
-function srgbToLinear(c8: number) {
-  const c = c8 / 255;
-  return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
-}
-
-/** Hue of an sRGB pixel, computed in the same space as the shader (linear
- * light by default, raw sRGB when the Color math setting says so); null
- * for greys. */
-function pixelHue(
-  r8: number,
-  g8: number,
-  b8: number,
-  linear: boolean,
-): number | null {
-  const cv = (v: number) => (linear ? srgbToLinear(v) : v / 255);
-  const r = cv(r8);
-  const g = cv(g8);
-  const b = cv(b8);
-  const max = Math.max(r, g, b);
-  const min = Math.min(r, g, b);
-  const diff = max - min;
-  if (diff === 0) return null;
-  let h;
-  if (max === r) h = (g - b) / diff;
-  else if (max === g) h = 2 + (b - r) / diff;
-  else h = 4 + (r - g) / diff;
-  h /= 6;
-  return h < 0 ? h + 1 : h;
 }
 
 type CanvasCursor = "reticle" | "grabbing" | "hidden";
@@ -1123,11 +1094,14 @@ export function BreakdownCanvas() {
   // True while a newly selected image is decoding; the previous image
   // stays up underneath, so this just badges the wait.
   const [decoding, setDecoding] = useState(false);
+  const loadError = useSourceStore((s) => s.error);
 
   if (!blob) {
     return (
       <div className="flex h-full w-full items-center justify-center">
-        <p className="text-base text-muted-foreground">Loading image…</p>
+        <p className="text-base text-muted-foreground">
+          {loadError ? "Drop an image to get started" : "Loading image…"}
+        </p>
       </div>
     );
   }

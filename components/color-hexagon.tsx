@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef } from "react";
-import { rgbToHex, rgbToHsb } from "@/lib/color";
+import { linearToSrgb, rgbToHex, rgbToHsb } from "@/lib/color";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useUiStore, type SampledColor } from "@/stores/ui-store";
 import { hueMapTileIndex } from "@/lib/tile-transforms";
@@ -21,13 +21,11 @@ const smoothstep = (a: number, b: number, x: number) => {
 };
 const mix3 = (a: number[], b: number[], t: number) =>
   a.map((v, i) => v + (b[i] - v) * t);
-const linToSrgb = (v: number) =>
-  v <= 0.0031308 ? v * 12.92 : 1.055 * Math.pow(v, 1 / 2.4) - 0.055;
 /** Shader constant -> CSS channel. Under sRGB math the tiles use the
  * constants as raw sRGB values; under linear math they get the output
  * conversion — mirror that so the ring matches the tile as rendered. */
 const toCss255 = (v: number, srgbMath: boolean) =>
-  Math.round((srgbMath ? v : linToSrgb(v)) * 255);
+  Math.round((srgbMath ? v : linearToSrgb(v)) * 255);
 
 /** Shared conic-gradient builder: `colorAt(hue01)` gives the shader-space
  * color for a hue. CSS conic runs clockwise from the top, our hue angles
