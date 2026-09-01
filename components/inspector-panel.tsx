@@ -6,6 +6,7 @@ import { Segmented } from "@/components/ui/segmented";
 import { LibraryPanel, SelectionDetails } from "@/components/library-panel";
 import { SettingsPanel } from "@/components/settings-panel";
 import { TILE_TRANSFORMS } from "@/lib/tile-transforms";
+import { GAMUT_LABEL, useDisplayGamut } from "@/lib/display-gamut";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useUiStore } from "@/stores/ui-store";
 import { cn } from "@/lib/utils";
@@ -108,6 +109,32 @@ function TileSubSetting({ tileKey }: { tileKey: string | null }) {
   );
 }
 
+/** What the screen can show versus what the tiles are rendered in. The
+ * canvas is sRGB end to end (see wiki/research/wide-gamut.md), so on a
+ * P3 or Rec. 2020 display the row says so rather than letting the wider
+ * gamut pass unnoticed. */
+function DisplayGamutRow() {
+  const gamut = useDisplayGamut();
+  return (
+    <div className="flex items-baseline justify-between gap-3 px-0">
+      <span className="text-base text-muted-foreground">Display</span>
+      <span
+        className="text-right font-mono text-base"
+        title={
+          gamut === "srgb"
+            ? "This display reports the sRGB gamut, which is what the tiles are rendered in."
+            : `This display can show ${GAMUT_LABEL[gamut]}; the tiles and readouts are sRGB, so wider colours in a tagged source are clipped on decode.`
+        }
+      >
+        {GAMUT_LABEL[gamut]}
+        {gamut !== "srgb" && (
+          <span className="text-muted-foreground"> · tiles sRGB</span>
+        )}
+      </span>
+    </div>
+  );
+}
+
 function InspectTab() {
   const tileLayout = useSettingsStore((s) => s.tileLayout);
   const panelWidth = useSettingsStore((s) => s.panelWidth);
@@ -148,6 +175,7 @@ function InspectTab() {
       <div className="-mx-3 -my-2">
         <SelectionDetails />
       </div>
+      <DisplayGamutRow />
       <p className="text-center text-sm text-muted-foreground">
         Images stay on your device
       </p>

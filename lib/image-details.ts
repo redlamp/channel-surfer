@@ -55,20 +55,78 @@ function pngColorSpace(v: DataView): string {
   return UNTAGGED;
 }
 
-/** Look for an APP2 ICC_PROFILE marker in a JPEG. */
+/**
+ * The profile description from an ICC blob's `desc` tag, or null. Handles
+ * the v2 `desc` (ASCII) and v4 `mluc` (UTF-16BE records) encodings. Only
+ * the tag table and the tag itself are touched, so the first APP2
+ * segment of a JPEG is usually enough.
+ */
+export function iccDescription(v: DataView, start: number, end: number): string | null {
+  const len = end - start;
+  if (len < 132) return null;
+  const tagCount = v.getUint32(start + 128);
+  if (tagCount > 256) return null;
+  for (let i = 0; i < tagCount; i++) {
+    const entry = start + 132 + i * 12;
+    if (entry + 12 > end) return null;
+    if (v.getUint32(entry) !== 0x64657363) continue; // 'desc'
+    const off = start + v.getUint32(entry + 4);
+    const size = v.getUint32(entry + 8);
+    if (off + 12 > end) return null;
+    const type = v.getUint32(off);
+    if (type === 0x64657363) {
+      // 'desc': u32 type, u32 reserved, u32 ASCII count (incl. NUL), text.
+      const count = v.getUint32(off + 8);
+      let s = "";
+      for (let j = 0; j < count - 1 && off + 12 + j < end; j++) {
+        const c = v.getUint8(off + 12 + j);
+        if (c === 0) break;
+        s += String.fromCharCode(c);
+      }
+      return s || null;
+    }
+    if (type === 0x6d6c7563) {
+      // 'mluc': u32 type, u32 reserved, u32 records, u32 record size,
+      // then per record: lang(2) country(2) length(4) offset(4); the
+      // string is UTF-16BE at offset from the tag start.
+      if (v.getUint32(off + 8) < 1 || off + 28 > end) return null;
+      const strLen = v.getUint32(off + 20);
+      const strOff = off + v.getUint32(off + 24);
+      if (strOff + strLen > end || strLen > size) return null;
+      let s = "";
+      for (let j = 0; j + 1 < strLen; j += 2) {
+        const c = v.getUint16(strOff + j);
+        if (c === 0) break;
+        s += String.fromCharCode(c);
+      }
+      return s || null;
+    }
+    return null;
+  }
+  return null;
+}
+
+/** Look for an APP2 ICC_PROFILE marker in a JPEG and name the profile. */
 function jpegColorSpace(v: DataView): string {
   let offset = 2;
   while (offset + 4 <= v.byteLength) {
     if (v.getUint8(offset) !== 0xff) break;
     const marker = v.getUint8(offset + 1);
     if (marker === 0xda) break; // start of scan
+    const segLen = v.getUint16(offset + 2);
     if (marker === 0xe2 && offset + 15 <= v.byteLength) {
       const sig = String.fromCharCode(
         ...Array.from({ length: 11 }, (_, i) => v.getUint8(offset + 4 + i)),
       );
-      if (sig === "ICC_PROFILE") return "ICC profile embedded";
+      if (sig === "ICC_PROFILE") {
+        // "ICC_PROFILE\0" + chunk index + chunk count, then the profile.
+        const start = offset + 4 + 14;
+        const end = Math.min(offset + 2 + segLen, v.byteLength);
+        const name = iccDescription(v, start, end);
+        return name ? `ICC: ${name}` : "ICC profile embedded";
+      }
     }
-    offset += 2 + v.getUint16(offset + 2);
+    offset += 2 + segLen;
   }
   return UNTAGGED;
 }
