@@ -31,6 +31,9 @@ import {
 const RETICLE_SVG = `<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'><g fill='none' stroke-linecap='round'><g stroke='black' stroke-width='4'><path d='M16 2v7M16 23v7M2 16h7M23 16h7'/></g><g stroke='white' stroke-width='2'><path d='M16 2v7M16 23v7M2 16h7M23 16h7'/></g></g></svg>`;
 const RETICLE_CURSOR = `url("data:image/svg+xml,${encodeURIComponent(RETICLE_SVG)}") 16 16, crosshair`;
 
+/** A still single-finger press this long opens the effect menu. */
+const LONG_PRESS_MS = 500;
+
 const CURSOR_CSS: Record<CanvasCursor, string> = {
   reticle: RETICLE_CURSOR,
   grabbing: "grabbing",
@@ -75,6 +78,35 @@ export function BreakdownCanvas() {
   // click (open the effect menu); anything further was a camera pan, so
   // the menu stays shut and MapControls keeps the gesture.
   const rmbDownRef = useRef<{ x: number; y: number } | null>(null);
+  // Touch long-press stands in for right-click: a single finger held
+  // still for LONG_PRESS_MS opens the effect menu for the tile under it.
+  const pressRef = useRef<{
+    timer: number;
+    x: number;
+    y: number;
+    pointerId: number;
+  } | null>(null);
+  const cancelPress = () => {
+    if (pressRef.current) {
+      window.clearTimeout(pressRef.current.timer);
+      pressRef.current = null;
+    }
+  };
+
+  const openMenuAt = (clientX: number, clientY: number, el: HTMLElement) => {
+    const r = el.getBoundingClientRect();
+    const x = clientX - r.left;
+    const y = clientY - r.top;
+    const tile = canvasBridge.tileAtScreen?.(x, y) ?? null;
+    if (tile === null) return false;
+    setTileMenu({
+      x,
+      y,
+      tile,
+      current: useSettingsStore.getState().tileLayout[tile],
+    });
+    return true;
+  };
 
   if (!blob) {
     return (
@@ -105,28 +137,50 @@ export function BreakdownCanvas() {
       // belongs to the camera (two-finger pan/pinch), never the pin.
       onPointerDownCapture={(e) => {
         canvasBridge.pointerCount += 1;
-        if (canvasBridge.pointerCount > 1) canvasBridge.multiTouch = true;
+        if (canvasBridge.pointerCount > 1) {
+          canvasBridge.multiTouch = true;
+          cancelPress();
+        }
         if (e.button === 2) rmbDownRef.current = { x: e.clientX, y: e.clientY };
+        if (e.pointerType === "touch" && canvasBridge.pointerCount === 1) {
+          cancelPress();
+          const el = e.currentTarget;
+          const { clientX, clientY, pointerId } = e;
+          pressRef.current = {
+            x: clientX,
+            y: clientY,
+            pointerId,
+            timer: window.setTimeout(() => {
+              pressRef.current = null;
+              if (openMenuAt(clientX, clientY, el)) {
+                canvasBridge.longPressAt = performance.now();
+                navigator.vibrate?.(10);
+              }
+            }, LONG_PRESS_MS),
+          };
+        }
+      }}
+      onPointerMoveCapture={(e) => {
+        const p = pressRef.current;
+        if (p && p.pointerId === e.pointerId &&
+            Math.hypot(e.clientX - p.x, e.clientY - p.y) > RMB_SLOP)
+          cancelPress();
       }}
       onPointerUpCapture={(e) => {
+        cancelPress();
         if (e.button === 2) {
           const down = rmbDownRef.current;
           rmbDownRef.current = null;
           const moved =
             !down || Math.hypot(e.clientX - down.x, e.clientY - down.y) > RMB_SLOP;
-          if (!moved && hoverTile !== null) {
-            const r = e.currentTarget.getBoundingClientRect();
-            setTileMenu({
-              x: e.clientX - r.left,
-              y: e.clientY - r.top,
-              tile: hoverTile,
-              current: useSettingsStore.getState().tileLayout[hoverTile],
-            });
-          }
+          if (!moved) openMenuAt(e.clientX, e.clientY, e.currentTarget);
         }
         pointerReleased();
       }}
-      onPointerCancelCapture={pointerReleased}
+      onPointerCancelCapture={() => {
+        cancelPress();
+        pointerReleased();
+      }}
       onDoubleClick={() => {
         // A double-click the mesh already handled arrives here ~instantly
         // after; anything else was outside the tiles — recenter the view.

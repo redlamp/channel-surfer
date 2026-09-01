@@ -7,9 +7,11 @@ import { canvasBridge, useUiStore } from "@/stores/ui-store";
 import {
   DEFAULT_TARGET_HUE,
   FRAME_MARGIN,
+  clearRegion,
   fitAllZoom,
   gridScreenRect,
   insetCenter,
+  tileAtScreen,
   tileRect,
   type CanvasCursor,
 } from "./geometry";
@@ -41,6 +43,7 @@ export function useCameraFraming(
   const applyView = useCallback(
     (x: number, y: number, zoom: number, snap: boolean) => {
       const st = sceneRef.current;
+      st.userMoved = false;
       const { camera, controls } = get();
       if (snap && camera instanceof THREE.OrthographicCamera) {
         st.viewGoal = null;
@@ -64,11 +67,8 @@ export function useCameraFraming(
       st.zoomedTile = tile;
       useUiStore.getState().setFramedTile(tile);
       const r = tileRect(tile, aspect);
-      const zoom =
-        Math.min(
-          (size.width - insets.right) / r.w,
-          (size.height - insets.top) / r.h,
-        ) * FRAME_MARGIN;
+      const clear = clearRegion(size, insets);
+      const zoom = Math.min(clear.width / r.w, clear.height / r.h) * FRAME_MARGIN;
       st.framedZoom = zoom;
       const c = insetCenter(r.cx, r.cy, zoom, insets);
       applyView(c.x, c.y, zoom, snap);
@@ -102,6 +102,7 @@ export function useCameraFraming(
     const onStart = () => {
       const st = sceneRef.current;
       st.viewGoal = null;
+      st.userMoved = true;
       if (!st.pinDrag) onCursor("grabbing");
     };
     const onEnd = () => onCursor("reticle");
@@ -129,8 +130,14 @@ export function useCameraFraming(
       if (!(camera instanceof THREE.OrthographicCamera)) return null;
       return gridScreenRect(aspect, camera, size, gl.getPixelRatio());
     };
+    canvasBridge.tileAtScreen = (x, y) => {
+      const { camera, size } = get();
+      if (!(camera instanceof THREE.OrthographicCamera)) return null;
+      return tileAtScreen(x, y, aspect, camera, size);
+    };
     return () => {
       canvasBridge.gridScreenRect = null;
+      canvasBridge.tileAtScreen = null;
     };
   }, [aspect, get]);
 
@@ -169,8 +176,21 @@ export function useCameraFraming(
       camera.updateProjectionMatrix();
     }
     c?.saveState?.();
+    st.userMoved = false;
     invalidate();
   }, [texture, aspect, get, invalidate, frameTile, sceneRef]);
+
+  // Chrome changes (panel or sheet opening, header wrapping) refit the
+  // view into the new clear region — unless the user has taken the
+  // camera by hand since the last fit, in which case their view stands.
+  const insets = useUiStore((s) => s.viewInsets);
+  useEffect(() => {
+    if (!texture) return;
+    const st = sceneRef.current;
+    if (st.userMoved) return;
+    if (st.zoomedTile !== null) frameTile(st.zoomedTile, true);
+    else unframe(true);
+  }, [insets, texture, frameTile, unframe, sceneRef]);
 
   // The camera tween, and focus-mode dissolve. Registered before the
   // uniform sync so a frame's outlines are computed from the camera

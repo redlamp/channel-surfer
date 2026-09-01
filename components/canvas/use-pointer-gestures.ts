@@ -190,9 +190,11 @@ export function usePointerGestures(
   // Single click pins (or unpins) the color sample. Held briefly so a
   // double-click (framing) doesn't also move the pin.
   const onClick = (e: ThreeEvent<MouseEvent>) => {
-    // Ignore drag-release "clicks" (delta = px between down and up) and
-    // the trailing click of a multi-finger gesture.
+    // Ignore drag-release "clicks" (delta = px between down and up), the
+    // trailing click of a multi-finger gesture, and the release of a
+    // long-press that just opened the effect menu.
     if (!e.uv || e.delta > DRAG_ARM_PX || canvasBridge.multiTouch) return;
+    if (performance.now() - canvasBridge.longPressAt < 1000) return;
     const st = sceneRef.current;
     const { tile, u, v } = tileFromUv(e.uv);
     const touch = (e.nativeEvent as PointerEvent).pointerType === "touch";

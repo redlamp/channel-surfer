@@ -23,6 +23,9 @@ export interface SceneState {
   zoomedTile: number | null;
   /** Camera zoom at which the current framing landed. */
   framedZoom: number;
+  /** True once the user pans or zooms by hand after a programmatic
+   * fit; chrome changes then leave the view alone. */
+  userMoved: boolean;
 
   /* --- pointer gestures (use-pointer-gestures) --- */
   hueGoal: number;
@@ -58,6 +61,7 @@ export function useSceneRef(): SceneRef {
     viewGoal: null,
     zoomedTile: null,
     framedZoom: 0,
+    userMoved: false,
     hueGoal: DEFAULT_TARGET_HUE,
     hoverUv: null,
     pinUv: null,
