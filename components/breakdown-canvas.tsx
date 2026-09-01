@@ -130,6 +130,7 @@ export function BreakdownCanvas() {
 
   return (
     <div
+      data-canvas="breakdown"
       className="relative h-full w-full overflow-hidden"
       style={{ cursor: CURSOR_CSS[cursor] }}
       onContextMenu={(e) => e.preventDefault()}
