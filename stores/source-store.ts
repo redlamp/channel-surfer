@@ -294,12 +294,30 @@ export const useSourceStore = create<SourceState>((set, get) => ({
     URL.revokeObjectURL(removed.url);
     void idbDeleteItem(id).catch(() => {});
     if (currentId === id) {
-      const next = remaining[remaining.length - 1] ?? demoItems[0] ?? null;
-      const nextIsItem = remaining.some((i) => i.id === next?.id);
-      void idbSetCurrentId(next?.id ?? null).catch(() => {});
+      let next: MediaItem | null =
+        remaining[remaining.length - 1] ?? demoItems[0] ?? null;
+      if (!next) {
+        // Nothing left and the demos never loaded (offline, or the
+        // fetch failed at startup): try the primary demo once more
+        // rather than parking the canvas on a blank "Loading image…".
+        set({ items: remaining, error: null });
+        try {
+          next = await loadDemoDef(DEMO_DEFS[0]);
+          set({ demoItems: [next] });
+        } catch {
+          set({
+            currentId: DEMO_ID,
+            error: "Couldn't load the demo images. Drop an image to continue.",
+            ...selectionFields(null, true),
+          });
+          return;
+        }
+      }
+      const nextIsItem = remaining.some((i) => i.id === next.id);
+      void idbSetCurrentId(next.id).catch(() => {});
       set({
         items: remaining,
-        currentId: next?.id ?? DEMO_ID,
+        currentId: next.id,
         ...selectionFields(next, !nextIsItem),
       });
       probeDetails(next, set, get);
