@@ -29,3 +29,20 @@ GLSL shader. Port of the Gigi prototype in `C:\workspace\ImageView`
 - sRGB discipline: textures load as sRGB (shader samples are linear); the
   fragment shader converts linear → sRGB explicitly at the end, matching the
   original HLSL. Don't add three's built-in color-space chunks on top.
+
+## Verifying changes (cheapest first)
+
+1. `bun run check` — lint, typecheck, and the unit suite (`tests/unit`,
+   ~0.1s). Run it before every commit; read only the tail of its output.
+2. `bun run test:e2e` — the Playwright shader suite (`tests/e2e`, ~5s
+   with the dev server already up). It reads pixels back off the WebGL
+   canvas and checks every tile effect against the source pixels, so a
+   shader or dispatcher change is verified by this, NOT by screenshots.
+   Add a case to `expected()` in `tests/e2e/shader.e2e.ts` when adding
+   an effect.
+3. Screenshots in the Browser pane are for layout and UI only. The pane
+   pauses requestAnimationFrame while hidden, so WebGL frames and camera
+   tweens stall between screenshots — do not read that as a bug.
+
+CI (`.github/workflows/ci.yml`) runs all three on push to `dev`/`main`;
+the Pages deploy stays gated on typecheck alone.

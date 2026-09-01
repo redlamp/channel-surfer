@@ -100,6 +100,13 @@ export const canvasBridge = {
   multiTouch: false,
 };
 
+// Exposed for the end-to-end shader tests (and DevTools): where the grid
+// sits on screen, and which tile is under a point.
+if (typeof window !== "undefined") {
+  (window as unknown as { __channelSurfer?: unknown }).__channelSurfer =
+    canvasBridge;
+}
+
 export const useUiStore = create<UiState>((set) => ({
   hoverColor: null,
   lastHoverColor: null,
