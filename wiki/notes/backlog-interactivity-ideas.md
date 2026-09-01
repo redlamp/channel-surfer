@@ -21,15 +21,21 @@ Double-click a tile frames it via a camera tween; double-click again
 returns to the fitted grid. (Chosen over single-click so plain clicks stay
 free for future picking interactions.)
 
-## Hot-swap tile contents
+## Hot-swap tile contents — DONE 2026-08-26
 
-Choose what each tile displays (from the full set of channel modes) instead
+Shipped as the effect library ([[decision-tile-effect-library]]): right-click
+(long-press on touch) a tile, or the Labs compass grid.
+
+Original ask: choose what each tile displays (from the full set of channel modes) instead
 of the fixed 3×3 assignment. Implies a per-tile mode uniform (int array)
 rather than the hardcoded switch on tile index.
 
-## Settings
+## Settings — DONE 2026-08-23 onward
 
-Expose the shader tunables (hue target, accent colors, saturation
+The Settings tab of the inspector; the shader tunables that survived
+(mid level, neutral tolerance, chroma smoothing) sit behind Labs.
+
+Original ask: expose the shader tunables (hue target, accent colors, saturation
 threshold, brightness posterize stops) in a shadcn panel.
 
 ## Cursor-position response (hue recalibration) — DONE 2026-08-23

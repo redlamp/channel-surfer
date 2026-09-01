@@ -14,7 +14,9 @@
  *                                        composites transparency onto
  *                                        black, so pre-rounded corners
  *                                        ghost dark on a home screen
- *   header mark (components/surfer-app)  square master + CSS radius
+ *   public/brand/icon-40.png             rounded, for the 20px header
+ *                                        mark at 2x (the 512px master
+ *                                        was 130KB for a 20px slot)
  *
  * Run: bun scripts/generate-favicon.ts
  */
@@ -51,7 +53,8 @@ async function rounded(size: number) {
 await Bun.write("./app/icon.png", await rounded(SIZE));
 await Bun.write("./public/favicon-32.png", await rounded(32));
 await Bun.write("./app/apple-icon.png", await square(180));
+await Bun.write("./public/brand/icon-40.png", await rounded(40));
 
 console.log(
-  "icons written: app/icon.png + public/favicon-32.png (rounded), app/apple-icon.png (square)",
+  "icons written: app/icon.png + public/favicon-32.png + public/brand/icon-40.png (rounded), app/apple-icon.png (square)",
 );

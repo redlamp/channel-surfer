@@ -45,9 +45,10 @@ interface UiState {
   /** Focus-mode isolation: hide the non-focused tiles while framed. */
   isolate: boolean;
   /** Overlay chrome occluding the display area (header height, open
-   * panel width), in CSS px. Programmatic fits/frames center content in
-   * the unobstructed region; manual panning may go under the chrome. */
-  viewInsets: { top: number; right: number };
+   * panel width on wide windows, open sheet height on narrow ones), in
+   * CSS px. Programmatic fits/frames center content in the unobstructed
+   * region; manual panning may go under the chrome. */
+  viewInsets: ViewInsets;
   setHoverColor: (c: SampledColor | null) => void;
   setPinnedColor: (c: SampledColor | null) => void;
   setPinnedTile: (tile: number | null) => void;
@@ -58,7 +59,13 @@ interface UiState {
   setHexWidget: (patch: Partial<UiState["hexWidget"]>) => void;
   setHexDragging: (on: boolean) => void;
   setHexOverDock: (on: boolean) => void;
-  setViewInsets: (insets: { top: number; right: number }) => void;
+  setViewInsets: (insets: ViewInsets) => void;
+}
+
+export interface ViewInsets {
+  top: number;
+  right: number;
+  bottom: number;
 }
 
 /**
@@ -80,12 +87,25 @@ export const canvasBridge = {
     | null,
   /** The hexagon hover card, positioned per-frame by the scene. */
   hexCardEl: null as HTMLDivElement | null,
+  /** Tile under a canvas-relative CSS px point, or null off the grid.
+   * Touch long-press needs this: a tap never produces a hover. */
+  tileAtScreen: null as ((x: number, y: number) => number | null) | null,
+  /** When a long-press last opened the effect menu; the click that
+   * follows the release must not also pin. */
+  longPressAt: 0,
   /** Live pointer count over the canvas (capture-phase tracked). */
   pointerCount: 0,
   /** True from the moment a second pointer joins until shortly after all
    * lift — suppresses loop drags and click-pins during two-finger pans. */
   multiTouch: false,
 };
+
+// Exposed for the end-to-end shader tests (and DevTools): where the grid
+// sits on screen, and which tile is under a point.
+if (typeof window !== "undefined") {
+  (window as unknown as { __channelSurfer?: unknown }).__channelSurfer =
+    canvasBridge;
+}
 
 export const useUiStore = create<UiState>((set) => ({
   hoverColor: null,
@@ -99,7 +119,7 @@ export const useUiStore = create<UiState>((set) => ({
   hexWidget: { mode: "docked", size: 81, x: 24, y: 90 },
   hexDragging: false,
   hexOverDock: false,
-  viewInsets: { top: 48, right: 0 },
+  viewInsets: { top: 48, right: 0, bottom: 0 },
   setHoverColor: (hoverColor) =>
     set(hoverColor ? { hoverColor, lastHoverColor: hoverColor } : { hoverColor }),
   setPinnedColor: (pinnedColor) => set({ pinnedColor }),

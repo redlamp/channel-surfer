@@ -1,4 +1,14 @@
+---
+tags: [domain/process, status/superseded]
+---
+
 # Test Plan — 2026-08-23 — Breakdown MVP + Pan/Zoom
+
+> **Superseded 2026-09-01.** Never ticked, and it describes UI that is gone
+> (the gear button, the emoji title, the "Demo image" button, the header
+> readout rows). Shader and logic checks now run in `tests/`
+> ([[decision-verification-harness]]); write a fresh plan for manual UI
+> checks when one is needed.
 
 Shader math is already verified on-GPU (per-tile pixel readback against the
 SMPTE demo). These are the visual/interaction checks that need eyes on the

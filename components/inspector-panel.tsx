@@ -6,6 +6,7 @@ import { Segmented } from "@/components/ui/segmented";
 import { LibraryPanel, SelectionDetails } from "@/components/library-panel";
 import { SettingsPanel } from "@/components/settings-panel";
 import { TILE_TRANSFORMS } from "@/lib/tile-transforms";
+import { GAMUT_LABEL, useDisplayGamut } from "@/lib/display-gamut";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useUiStore } from "@/stores/ui-store";
 import { cn } from "@/lib/utils";
@@ -108,6 +109,32 @@ function TileSubSetting({ tileKey }: { tileKey: string | null }) {
   );
 }
 
+/** What the screen can show versus what the tiles are rendered in. The
+ * canvas is sRGB end to end (see wiki/research/wide-gamut.md), so on a
+ * P3 or Rec. 2020 display the row says so rather than letting the wider
+ * gamut pass unnoticed. */
+function DisplayGamutRow() {
+  const gamut = useDisplayGamut();
+  return (
+    <div className="flex items-baseline justify-between gap-3 px-0">
+      <span className="text-base text-muted-foreground">Display</span>
+      <span
+        className="text-right font-mono text-base"
+        title={
+          gamut === "srgb"
+            ? "This display reports the sRGB gamut, which is what the tiles are rendered in."
+            : `This display can show ${GAMUT_LABEL[gamut]}; the tiles and readouts are sRGB, so wider colours in a tagged source are clipped on decode.`
+        }
+      >
+        {GAMUT_LABEL[gamut]}
+        {gamut !== "srgb" && (
+          <span className="text-muted-foreground"> · tiles sRGB</span>
+        )}
+      </span>
+    </div>
+  );
+}
+
 function InspectTab() {
   const tileLayout = useSettingsStore((s) => s.tileLayout);
   const panelWidth = useSettingsStore((s) => s.panelWidth);
@@ -148,6 +175,7 @@ function InspectTab() {
       <div className="-mx-3 -my-2">
         <SelectionDetails />
       </div>
+      <DisplayGamutRow />
       <p className="text-center text-sm text-muted-foreground">
         Images stay on your device
       </p>
@@ -183,16 +211,20 @@ function beginPanelResize(e: React.PointerEvent<HTMLElement>) {
  * the display area (translucent, blurred) rather than taking layout
  * space, with the color inspector, media library, and settings as
  * tabs. Toggled from the header's panel-right button; one width for
- * every tab, user-resizable by its left edge.
+ * every tab, user-resizable by its left edge. On narrow windows it is
+ * a bottom sheet instead (`sheet`), full width and a fixed share of
+ * the window height, so the grid keeps the top of the screen.
  */
 export function InspectorPanel({
   tab,
   onTab,
   onClose,
+  sheet = false,
 }: {
   tab: PanelTab;
   onTab: (tab: PanelTab) => void;
   onClose: () => void;
+  sheet?: boolean;
 }) {
   const panelWidth = useSettingsStore((s) => s.panelWidth);
   // Track the measured header height so a wrapped (two-line) header
@@ -200,14 +232,20 @@ export function InspectorPanel({
   const headerH = useUiStore((s) => s.viewInsets.top);
   return (
     <aside
-      style={{ width: panelWidth, top: headerH + 12 }}
-      className="absolute right-3 bottom-3 z-20 flex flex-col overflow-hidden rounded-md border border-border bg-card/85 shadow-[var(--shadow-lg)] backdrop-blur-md"
+      style={sheet ? undefined : { width: panelWidth, top: headerH + 12 }}
+      className={cn(
+        "absolute z-20 flex flex-col overflow-hidden rounded-md border border-border bg-card/85 shadow-[var(--shadow-lg)] backdrop-blur-md",
+        // The sheet's height must agree with SHEET_FRACTION in surfer-app.
+        sheet ? "inset-x-3 bottom-3 h-[55dvh]" : "right-3 bottom-3",
+      )}
     >
-      <div
-        className="absolute inset-y-0 left-0 z-10 w-1.5 cursor-col-resize touch-none hover:bg-ring/40"
-        title="Drag to resize"
-        onPointerDown={beginPanelResize}
-      />
+      {!sheet && (
+        <div
+          className="absolute inset-y-0 left-0 z-10 w-1.5 cursor-col-resize touch-none hover:bg-ring/40"
+          title="Drag to resize"
+          onPointerDown={beginPanelResize}
+        />
+      )}
       <div className="flex shrink-0 border-b border-border font-mono text-sm">
         {TABS.map((t) => (
           <button

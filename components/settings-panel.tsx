@@ -21,6 +21,7 @@ import {
   type ColorModel,
   type HighlightMode,
   type HueMapStyle,
+  type Theme,
 } from "@/stores/settings-store";
 import { Fragment } from "react";
 import {
@@ -29,9 +30,14 @@ import {
   layoutHasTintGroup,
   TILE_TRANSFORMS,
   TRANSFORM_MENU,
-  DEFAULT_LAYOUT,
   type TransformKey,
 } from "@/lib/tile-transforms";
+
+const THEME_OPTIONS: { value: Theme; label: string }[] = [
+  { value: "dark", label: "Dark" },
+  { value: "light", label: "Light" },
+  { value: "system", label: "System" },
+];
 
 const HIGHLIGHT_OPTIONS: { value: HighlightMode; label: string }[] = [
   { value: "off", label: "Off" },
@@ -96,7 +102,9 @@ export function SettingsPanel({
   const setColorMath = useSettingsStore((s) => s.setColorMath);
   const chromaSmooth = useSettingsStore((s) => s.chromaSmooth);
   const setChromaSmooth = useSettingsStore((s) => s.setChromaSmooth);
-  const setWarmCoolShade = useSettingsStore((s) => s.setWarmCoolShade);
+  const theme = useSettingsStore((s) => s.theme);
+  const setTheme = useSettingsStore((s) => s.setTheme);
+  const reset = useSettingsStore((s) => s.reset);
 
   return (
     <aside
@@ -438,31 +446,28 @@ export function SettingsPanel({
             onChange={(v) => setShowColorSteps(v === "show")}
           />
         </div>
+
+        <div className="space-y-2">
+          <Label>
+            Theme
+            <HelpTip>
+              Light and dark chrome around the tiles. System follows the
+              OS. A workspace preference: Reset leaves it alone.
+            </HelpTip>
+          </Label>
+          <Segmented value={theme} options={THEME_OPTIONS} onChange={setTheme} />
+        </div>
       </div>
 
       <div className="flex gap-2 border-t border-border px-3 py-2">
+        {/* Restores every display setting (DISPLAY_DEFAULTS in the
+            store). Workspace preferences — panel geometry, Labs, theme —
+            deliberately survive. */}
         <Button
           variant="secondary"
           className="flex-1"
-          onClick={() => {
-            // Everything that changes what the tiles/readouts SHOW.
-            // Panel geometry (width, hexagon size) is workspace
-            // preference and deliberately survives a reset.
-            setHighlightMode("tile");
-            setRgbColorize(true);
-            setChromaColorize(false);
-            setColorModel("hsb");
-            setHueMapStyle("twilight");
-            setTileLayout(DEFAULT_LAYOUT);
-            setMidLevel(0.7);
-            setNeutralTolerance(5 / 255);
-            setChromaSmooth(false);
-            setWarmCoolShade(true);
-            setShowColorSteps(false);
-            setRgbFloat(false);
-            setShowColorHexagon(false);
-            setColorMath("srgb");
-          }}
+          onClick={reset}
+          title="Restore the shipping display settings"
         >
           Reset to defaults
         </Button>

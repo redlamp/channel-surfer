@@ -60,7 +60,9 @@
   --mono: "Share Tech Mono", ui-monospace, Consolas, monospace;
 
   font: 16px/1.5 var(--sans);
-  color-scheme: light dark;
+  /* The Theme setting toggles .dark on <html>; form controls and
+     scrollbars follow the class, not the OS. */
+  color-scheme: light;
   -webkit-font-smoothing: antialiased;
 
   --background: oklch(0.965 0 0);
@@ -107,6 +109,7 @@
 }
 
 .dark {
+  color-scheme: dark;
   /* #181818-ish page; steps above it held ~0.05 apart in oklch L. */
   --background: oklch(0.209 0 0);
   --foreground: oklch(0.985 0 0);

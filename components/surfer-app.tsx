@@ -8,9 +8,14 @@ import { ColorSteps } from "@/components/color-steps";
 import { DisplayToolbar } from "@/components/display-toolbar";
 import { HexFloat } from "@/components/hex-widget";
 import { InspectorPanel, type PanelTab } from "@/components/inspector-panel";
+import { NARROW_QUERY, useMediaQuery } from "@/lib/use-media-query";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useSourceStore } from "@/stores/source-store";
 import { canvasBridge, useUiStore } from "@/stores/ui-store";
+
+/** Bottom-sheet height on narrow windows, as a fraction of the window;
+ * the sheet's CSS height (`h-[55dvh]`) must agree. */
+export const SHEET_FRACTION = 0.55;
 
 /**
  * The full-bleed shell from the layout redesign: the display area IS
@@ -26,13 +31,25 @@ export function SurferApp() {
   const hydrate = useSourceStore((s) => s.hydrate);
   const loadFiles = useSourceStore((s) => s.loadFiles);
   const [dragging, setDragging] = useState(false);
-  const [panelOpen, setPanelOpen] = useState(true);
+  // Narrow (phone) windows: the panel is a bottom sheet and starts
+  // closed, since open it would cover the whole grid.
+  const narrow = useMediaQuery(NARROW_QUERY);
+  const [panelOpen, setPanelOpen] = useState(() => !narrow);
   const [panelTab, setPanelTab] = useState<PanelTab>("inspect");
   const panelWidth = useSettingsStore((s) => s.panelWidth);
   const headerRef = useRef<HTMLElement>(null);
   // Measured, not assumed: the Model group wraps to a second line on
   // narrow windows, making the header taller than its one-row 48px.
   const [headerH, setHeaderH] = useState(48);
+  const [windowH, setWindowH] = useState(() =>
+    typeof window === "undefined" ? 800 : window.innerHeight,
+  );
+
+  useEffect(() => {
+    const onResize = () => setWindowH(window.innerHeight);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   useEffect(() => {
     void hydrate();
@@ -48,14 +65,15 @@ export function SurferApp() {
   }, []);
 
   // Programmatic fits/frames center content in the region the chrome
-  // leaves clear: below the header, left of an open panel. Manual
-  // panning may still tuck content under either.
+  // leaves clear: below the header, left of an open panel (or above an
+  // open sheet). Manual panning may still tuck content under either.
   useEffect(() => {
     useUiStore.getState().setViewInsets({
       top: headerH,
-      right: panelOpen ? panelWidth + 12 : 0,
+      right: panelOpen && !narrow ? panelWidth + 12 : 0,
+      bottom: panelOpen && narrow ? Math.round(windowH * SHEET_FRACTION) + 12 : 0,
     });
-  }, [panelOpen, panelWidth, headerH]);
+  }, [panelOpen, panelWidth, headerH, narrow, windowH]);
 
   const handleFiles = useCallback(
     (files: FileList | null) => {
@@ -125,14 +143,15 @@ export function SurferApp() {
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <h1 className="flex items-center gap-2 font-mono text-xl leading-none font-semibold tracking-tight">
             {/* Mark and wordmark share one height. next/image is off
-                under static export, hence a plain img. */}
+                under static export, hence a plain img. icon-40 is the
+                pre-rounded 2x asset from scripts/generate-favicon.ts. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/brand/icon-square.png`}
+              src={`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/brand/icon-40.png`}
               alt=""
               width={20}
               height={20}
-              className="size-5 shrink-0 rounded-[4px]"
+              className="size-5 shrink-0"
             />
             Channel Surfer
           </h1>
@@ -238,6 +257,7 @@ export function SurferApp() {
           tab={panelTab}
           onTab={setPanelTab}
           onClose={() => setPanelOpen(false)}
+          sheet={narrow}
         />
       )}
 

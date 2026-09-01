@@ -7,6 +7,10 @@ import {
   normalizeLayout,
   type TransformKey,
 } from "@/lib/tile-transforms";
+import { SETTINGS_VERSION, migrateSettings } from "@/stores/settings-migrate";
+
+/** localStorage key; the theme boot script in the root layout reads it. */
+export const SETTINGS_STORAGE_KEY = "channel-surfer:settings";
 
 /** Where the hue-map hover recalibration listens: nowhere, only on the
  * hue-map tile, or anywhere in the grid. */
@@ -26,9 +30,12 @@ export type ColorMath = "linear" | "srgb";
 /** Hue-map rendering style (see wiki/research/hue-direction-encoding.md). */
 export type HueMapStyle = "warmcool" | "glow" | "twilight" | "diamond" | "crawl";
 
+/** UI theme. "system" follows prefers-color-scheme. */
+export type Theme = "dark" | "light" | "system";
 
-
-interface SettingsState {
+/** Everything that changes what the tiles and readouts SHOW. "Reset to
+ * defaults" restores exactly this set. */
+export interface DisplaySettings {
   highlightMode: HighlightMode;
   /** RGB channel tiles ("Tint"): false = black-to-white, true = black-to-color. */
   rgbColorize: boolean;
@@ -48,24 +55,57 @@ interface SettingsState {
    * is), so the hue-family tiles show gradients instead of 2x2 stairs
    * on 4:2:0 sources. Off = pixels exactly as stored. */
   chromaSmooth: boolean;
-  /** Warm/cool tile: multiply the accents by the pixel's brightness
-   * ("shaded", like Hue-shaded) instead of painting them flat. */
+  /** Warm/cool tile: Color-blend the accents with the pixel's
+   * luminosity ("shaded") instead of painting them flat. */
   warmCoolShade: boolean;
-  /** Inspector panel width in px, user-resizable by dragging its edge. */
-  panelWidth: number;
-  /** Hexagon size in the Inspect tab, px — the grip under it adjusts. */
-  panelHexSize: number;
   /** Show the color-taylor style hex/HSB derivation steps for the hovered pixel. */
   showColorSteps: boolean;
   /** Readout RGB values as 0.0-1.0 floats instead of 0-255 ints. */
   rgbFloat: boolean;
-  /** Labs: reveal experimental options (the non-default hue-map styles). */
-  labs: boolean;
-  /** Show the color-taylor Hexagon (HSB wheel) below the canvas. */
+  /** Show the color-taylor Hexagon (HSB wheel) as a hover card. */
   showColorHexagon: boolean;
   /** Tile math space: linear light (the Gigi original) or sRGB values
    * (matches how the readouts and most tools compute HSB). */
   colorMath: ColorMath;
+}
+
+/** Workspace preferences: how the app is arranged, not what it shows.
+ * These deliberately survive "Reset to defaults". */
+export interface WorkspaceSettings {
+  /** Inspector panel width in px, user-resizable by dragging its edge. */
+  panelWidth: number;
+  /** Hexagon size in the Inspect tab, px — the grip under it adjusts. */
+  panelHexSize: number;
+  /** Labs: reveal experimental options (the non-default hue-map styles). */
+  labs: boolean;
+  theme: Theme;
+}
+
+export const DISPLAY_DEFAULTS: DisplaySettings = {
+  highlightMode: "tile",
+  rgbColorize: true,
+  chromaColorize: false,
+  colorModel: "hsb",
+  hueMapStyle: "twilight",
+  tileLayout: [...DEFAULT_LAYOUT],
+  midLevel: 0.7,
+  neutralTolerance: 5 / 255,
+  chromaSmooth: false,
+  warmCoolShade: true,
+  showColorSteps: false,
+  rgbFloat: false,
+  showColorHexagon: false,
+  colorMath: "srgb",
+};
+
+export const WORKSPACE_DEFAULTS: WorkspaceSettings = {
+  panelWidth: 340,
+  panelHexSize: 160,
+  labs: false,
+  theme: "dark",
+};
+
+interface SettingsActions {
   setHighlightMode: (mode: HighlightMode) => void;
   setRgbColorize: (on: boolean) => void;
   setChromaColorize: (on: boolean) => void;
@@ -86,28 +126,18 @@ interface SettingsState {
   setLabs: (on: boolean) => void;
   setShowColorHexagon: (on: boolean) => void;
   setColorMath: (space: ColorMath) => void;
+  setTheme: (theme: Theme) => void;
+  /** Restore every display setting; workspace preferences stay. */
+  reset: () => void;
 }
+
+export type SettingsState = DisplaySettings & WorkspaceSettings & SettingsActions;
 
 export const useSettingsStore = create<SettingsState>()(
   persist(
     (set) => ({
-      highlightMode: "tile",
-      rgbColorize: true,
-      chromaColorize: false,
-      colorModel: "hsb",
-      hueMapStyle: "twilight",
-      tileLayout: [...DEFAULT_LAYOUT],
-      midLevel: 0.7,
-      neutralTolerance: 5 / 255,
-      chromaSmooth: false,
-      warmCoolShade: true,
-      panelWidth: 340,
-      panelHexSize: 160,
-      showColorSteps: false,
-      rgbFloat: false,
-      labs: false,
-      showColorHexagon: false,
-      colorMath: "srgb",
+      ...DISPLAY_DEFAULTS,
+      ...WORKSPACE_DEFAULTS,
       setHighlightMode: (highlightMode) => set({ highlightMode }),
       setRgbColorize: (rgbColorize) => set({ rgbColorize }),
       setChromaColorize: (chromaColorize) => set({ chromaColorize }),
@@ -136,44 +166,17 @@ export const useSettingsStore = create<SettingsState>()(
       setLabs: (labs) => set({ labs }),
       setShowColorHexagon: (showColorHexagon) => set({ showColorHexagon }),
       setColorMath: (colorMath) => set({ colorMath }),
+      setTheme: (theme) => set({ theme }),
+      reset: () =>
+        set({ ...DISPLAY_DEFAULTS, tileLayout: [...DEFAULT_LAYOUT] }),
     }),
     {
-      name: "channel-surfer:settings",
-      // v1: default highlightMode changed "all" -> "tile". v2: the static
-      // "bands" hue-map style became the animated "crawl". v3: twilight
-      // won the style bake-off and becomes the default once for everyone;
-      // the other styles live behind the Labs flag. v4: black-to-color
-      // tint becomes the default once. v5: gamma followed the image
-      // ("auto"). v6: auto is gone — those settings move to sRGB, now
-      // the default. v7: chroma smoothing demoted to Labs — reset once
-      // so nobody keeps an invisible effect switched on from testing.
-      // v8: the 2026-08-27 shipping grid (chroma/warm-cool up top, hue
-      // map retired from the default) plus white chroma tint and shaded
-      // warm/cool become the defaults once for everyone.
-      // (New fields are additive — zustand merges defaults in.)
-      version: 8,
-      migrate: (persisted, version) => {
-        const state = persisted as Omit<
-          Partial<SettingsState>,
-          "hueMapStyle"
-        > & { hueMapStyle?: string };
-        if (version === 0) state.highlightMode = "tile";
-        if (version <= 1 && state.hueMapStyle === "bands")
-          state.hueMapStyle = "crawl";
-        if (version <= 2) state.hueMapStyle = "twilight";
-        if (version <= 3) state.rgbColorize = true;
-        if (version <= 5) state.colorMath = "srgb";
-        if (version <= 6) state.chromaSmooth = false;
-        if (version <= 7) {
-          state.tileLayout = [...DEFAULT_LAYOUT];
-          state.chromaColorize = false;
-          state.warmCoolShade = true;
-        }
-        // Layouts are stored as effect keys, so a retired or renamed
-        // effect falls back to whatever ships in that position.
-        state.tileLayout = normalizeLayout(state.tileLayout);
-        return state as SettingsState;
-      },
+      name: SETTINGS_STORAGE_KEY,
+      // Version history and the upgrade steps live in settings-migrate.ts.
+      // New fields are additive — zustand merges defaults in (`theme`
+      // arrived that way on 2026-09-01).
+      version: SETTINGS_VERSION,
+      migrate: migrateSettings,
     },
   ),
 );

@@ -45,3 +45,7 @@ wiki/.obsidian/
 
 # remember plugin session data
 .remember/
+
+# playwright
+/test-results/
+/playwright-report/
