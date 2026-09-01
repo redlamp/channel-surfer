@@ -1,10 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { useSettingsStore } from "@/stores/settings-store";
-
-/** Persisted settings key, shared with the pre-paint script in layout. */
-export const SETTINGS_STORAGE_KEY = "channel-surfer:settings";
+import { SETTINGS_STORAGE_KEY, useSettingsStore } from "@/stores/settings-store";
 
 /**
  * Keeps the root element's `dark` class in step with the Theme setting

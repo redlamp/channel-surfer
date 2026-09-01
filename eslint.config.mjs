@@ -12,6 +12,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Not source: plugin session data and Playwright output.
+    ".remember/**",
+    "test-results/**",
+    "playwright-report/**",
   ]),
 ]);
 

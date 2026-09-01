@@ -7,6 +7,10 @@ import {
   normalizeLayout,
   type TransformKey,
 } from "@/lib/tile-transforms";
+import { SETTINGS_VERSION, migrateSettings } from "@/stores/settings-migrate";
+
+/** localStorage key; the theme boot script in the root layout reads it. */
+export const SETTINGS_STORAGE_KEY = "channel-surfer:settings";
 
 /** Where the hue-map hover recalibration listens: nowhere, only on the
  * hue-map tile, or anywhere in the grid. */
@@ -167,43 +171,12 @@ export const useSettingsStore = create<SettingsState>()(
         set({ ...DISPLAY_DEFAULTS, tileLayout: [...DEFAULT_LAYOUT] }),
     }),
     {
-      name: "channel-surfer:settings",
-      // v1: default highlightMode changed "all" -> "tile". v2: the static
-      // "bands" hue-map style became the animated "crawl". v3: twilight
-      // won the style bake-off and becomes the default once for everyone;
-      // the other styles live behind the Labs flag. v4: black-to-color
-      // tint becomes the default once. v5: gamma followed the image
-      // ("auto"). v6: auto is gone — those settings move to sRGB, now
-      // the default. v7: chroma smoothing demoted to Labs — reset once
-      // so nobody keeps an invisible effect switched on from testing.
-      // v8: the 2026-08-27 shipping grid (chroma/warm-cool up top, hue
-      // map retired from the default) plus white chroma tint and shaded
-      // warm/cool become the defaults once for everyone.
-      // (New fields are additive — zustand merges defaults in. `theme`
-      // arrived that way on 2026-09-01.)
-      version: 8,
-      migrate: (persisted, version) => {
-        const state = persisted as Omit<
-          Partial<SettingsState>,
-          "hueMapStyle"
-        > & { hueMapStyle?: string };
-        if (version === 0) state.highlightMode = "tile";
-        if (version <= 1 && state.hueMapStyle === "bands")
-          state.hueMapStyle = "crawl";
-        if (version <= 2) state.hueMapStyle = "twilight";
-        if (version <= 3) state.rgbColorize = true;
-        if (version <= 5) state.colorMath = "srgb";
-        if (version <= 6) state.chromaSmooth = false;
-        if (version <= 7) {
-          state.tileLayout = [...DEFAULT_LAYOUT];
-          state.chromaColorize = false;
-          state.warmCoolShade = true;
-        }
-        // Layouts are stored as effect keys, so a retired or renamed
-        // effect falls back to whatever ships in that position.
-        state.tileLayout = normalizeLayout(state.tileLayout);
-        return state as SettingsState;
-      },
+      name: SETTINGS_STORAGE_KEY,
+      // Version history and the upgrade steps live in settings-migrate.ts.
+      // New fields are additive — zustand merges defaults in (`theme`
+      // arrived that way on 2026-09-01).
+      version: SETTINGS_VERSION,
+      migrate: migrateSettings,
     },
   ),
 );
