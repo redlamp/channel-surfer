@@ -38,8 +38,9 @@ export interface ViewGoal {
   zoom: number;
 }
 
-/** Overlay chrome the fit should avoid (header, open panel). */
-export type ViewInsets = { top: number; right: number };
+/** Overlay chrome the fit should avoid (header, open panel or sheet). */
+export type { ViewInsets } from "@/stores/ui-store";
+import type { ViewInsets } from "@/stores/ui-store";
 
 export type ScreenSize = { width: number; height: number };
 
@@ -51,24 +52,49 @@ export function barGroupOfTile(layout: TileLayout, tile: number): BarGroup | nul
   return tintGroupOfTile(layout, tile);
 }
 
+/** The region the chrome leaves clear, in CSS px. */
+export function clearRegion(size: ScreenSize, insets: ViewInsets) {
+  return {
+    width: Math.max(1, size.width - insets.right),
+    height: Math.max(1, size.height - insets.top - insets.bottom),
+  };
+}
+
 export function fitAllZoom(size: ScreenSize, aspect: number, insets: ViewInsets) {
+  const clear = clearRegion(size, insets);
   return (
-    Math.min(
-      (size.width - insets.right) / (aspect * PLANE_H),
-      (size.height - insets.top) / PLANE_H,
-    ) * FIT_MARGIN
+    Math.min(clear.width / (aspect * PLANE_H), clear.height / PLANE_H) *
+    FIT_MARGIN
   );
 }
 
 /** Camera position that centers world point (cx, cy) in the region the
- * chrome leaves clear. Screen +y is down and world +y is up, so both
- * offsets ADD: the camera looks above-right of the content, pushing it
- * down-left on screen, out from under the header and panel. */
+ * chrome leaves clear. Screen +y is down and world +y is up, so a
+ * header (top) and a right panel both ADD: the camera looks above-right
+ * of the content, pushing it down-left on screen, out from under the
+ * chrome. A bottom sheet subtracts, pushing content up. */
 export function insetCenter(cx: number, cy: number, zoom: number, insets: ViewInsets) {
   return {
     x: cx + insets.right / (2 * zoom),
-    y: cy + insets.top / (2 * zoom),
+    y: cy + (insets.top - insets.bottom) / (2 * zoom),
   };
+}
+
+/** Tile under a canvas-relative CSS px point, or null off the grid. */
+export function tileAtScreen(
+  px: number,
+  py: number,
+  aspect: number,
+  camera: THREE.OrthographicCamera,
+  size: ScreenSize,
+): number | null {
+  const wx = (px - size.width / 2) / camera.zoom + camera.position.x;
+  const wy = -(py - size.height / 2) / camera.zoom + camera.position.y;
+  const w = aspect * PLANE_H;
+  const u = wx / w + 0.5;
+  const v = wy / PLANE_H + 0.5;
+  if (u < 0 || u >= 1 || v < 0 || v >= 1) return null;
+  return tileFromUv({ x: u, y: v }).tile;
 }
 
 /** Center and size of a tile (0..8, row-major from top-left) in world units. */
