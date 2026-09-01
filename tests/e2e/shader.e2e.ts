@@ -108,9 +108,13 @@ const POINTS = [0.08, 0.2, 0.32, 0.44, 0.56, 0.68, 0.8, 0.92].flatMap((fx) =>
   [0.2, 0.35, 0.5, 0.62].map((fy) => ({ fx, fy })),
 );
 
+/** The WebGL canvas — not the hexagon widget's 2D one. */
+const GL_CANVAS = '[data-canvas="breakdown"] canvas';
+
 async function waitForGrid(page: Page): Promise<Rect> {
   await page.goto("/");
-  await expect(page.locator("canvas")).toBeVisible();
+  // Generous: the dev server may be recompiling after an edit.
+  await expect(page.locator(GL_CANVAS)).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText("Decoding image…")).toHaveCount(0, { timeout: 30_000 });
   // The grid rect exists once the scene has an image; a rendered frame
   // follows within a few animation frames.
@@ -138,7 +142,9 @@ async function waitForGrid(page: Page): Promise<Rect> {
 async function sampleTiles(page: Page, rect: Rect, fx: number, fy: number, sourceTile: number) {
   return page.evaluate(
     ({ rect, fx, fy, sourceTile }) => {
-      const canvas = document.querySelector("canvas") as HTMLCanvasElement;
+      const canvas = document.querySelector(
+        '[data-canvas="breakdown"] canvas',
+      ) as HTMLCanvasElement;
       const gl = canvas.getContext("webgl2") ?? canvas.getContext("webgl");
       if (!gl) throw new Error("no gl context");
       const px = new Uint8Array(4);

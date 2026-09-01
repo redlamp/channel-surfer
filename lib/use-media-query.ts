@@ -19,5 +19,7 @@ export function useMediaQuery(query: string): boolean {
 }
 
 /** Below Tailwind's `md` (48rem): the inspector becomes a bottom sheet
- * and long-press stands in for right-click. */
-export const NARROW_QUERY = "(max-width: 47.99rem)";
+ * and long-press stands in for right-click. The min-width guard keeps a
+ * zero-size window (a hidden preview pane, a background tab during
+ * load) on the desktop layout instead of reading as a phone. */
+export const NARROW_QUERY = "(min-width: 1px) and (max-width: 47.99rem)";
