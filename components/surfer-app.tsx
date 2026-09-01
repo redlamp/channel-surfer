@@ -143,14 +143,15 @@ export function SurferApp() {
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <h1 className="flex items-center gap-2 font-mono text-xl leading-none font-semibold tracking-tight">
             {/* Mark and wordmark share one height. next/image is off
-                under static export, hence a plain img. */}
+                under static export, hence a plain img. icon-40 is the
+                pre-rounded 2x asset from scripts/generate-favicon.ts. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/brand/icon-square.png`}
+              src={`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/brand/icon-40.png`}
               alt=""
               width={20}
               height={20}
-              className="size-5 shrink-0 rounded-[4px]"
+              className="size-5 shrink-0"
             />
             Channel Surfer
           </h1>

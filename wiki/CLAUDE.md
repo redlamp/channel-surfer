@@ -7,11 +7,11 @@ gitignored; `.vault-nickname` names the vault in Obsidian's switcher.
 
 | Kind of knowledge | Destination |
 |---|---|
-| Formal, user-facing spec | `docs/` (not the wiki) |
+| Formal, user-facing spec | none yet — README covers it; add `docs/` only when a spec outgrows the README |
 | Decisions, rationale, state, half-formed thoughts | `wiki/notes/` |
 | External references, summarised for this project | `wiki/research/` |
 | What happened today | `wiki/daily/YYYY-MM-DD.md` |
-| Session test plans for Taylor to tick through | `wiki/test-plans/` |
+| Session test plans for Taylor to tick through | `wiki/test-plans/` (manual UI checks only — shader and logic checks belong in `tests/`) |
 | Hand-curated indexes per cluster | `wiki/mocs/` |
 | Cross-project tool gotchas | global `~/.claude/memory/` (not here) |
 

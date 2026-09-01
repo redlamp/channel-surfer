@@ -1,8 +1,12 @@
 ---
-tags: [domain/color, status/draft]
+tags: [domain/color, status/adopted]
 ---
 
 # Hue Direction Encoding
+
+**Outcome (2026-08-23):** candidate 1 (twilight) shipped as the default hue
+map; glow, diamond, and crawl live behind Labs. The hue map left the
+shipping grid on 2026-08-27 but stays in the library.
 
 **Date:** 2026-08-23 · **Question:** how do other fields show CW vs CCW hue
 rotation relative to a reference hue?

@@ -7,15 +7,25 @@ const u32 = (v: number) => [(v >>> 24) & 0xff, (v >> 16) & 0xff, (v >> 8) & 0xff
 const ascii = (s: string) => [...s].map((c) => c.charCodeAt(0));
 
 /** A JPEG with one SOF marker carrying the given sampling factors. */
+/** A minimal ICC v2 profile: 128-byte header, one `desc` tag. */
+function iccProfile(name: string) {
+  const header = new Array(128).fill(0);
+  const tagTable = [...u32(1), ...ascii("desc"), ...u32(128 + 4 + 12), ...u32(12 + name.length + 1)];
+  const desc = [...ascii("desc"), 0, 0, 0, 0, ...u32(name.length + 1), ...ascii(name), 0];
+  return [...header, ...tagTable, ...desc];
+}
+
 function jpeg(opts: {
   progressive?: boolean;
   y: number;
   cb: number;
   icc?: boolean;
+  iccName?: string;
 }) {
   const bytes = [0xff, 0xd8];
   if (opts.icc) {
-    const payload = [...ascii("ICC_PROFILE"), 0, 1, 1, 0, 0, 0, 0];
+    const profile = opts.iccName ? iccProfile(opts.iccName) : [0, 0, 0, 0];
+    const payload = [...ascii("ICC_PROFILE"), 0, 1, 1, ...profile];
     bytes.push(0xff, 0xe2, ...u16(payload.length + 2), ...payload);
   }
   const sof = [
@@ -65,6 +75,11 @@ describe("probeImageDetails", () => {
     expect(d.chromaSubsampling).toBe("4:4:4");
     expect(d.progressive).toBe(true);
     expect(d.colorSpace).toBe("ICC profile embedded");
+  });
+
+  test("JPEG names its ICC profile from the desc tag", async () => {
+    const d = await probeImageDetails(jpeg({ y: 0x11, cb: 0x11, icc: true, iccName: "Display P3" }));
+    expect(d.colorSpace).toBe("ICC: Display P3");
   });
 
   test("JPEG 4:2:2", async () => {
