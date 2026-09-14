@@ -46,8 +46,9 @@ export type ScreenSize = { width: number; height: number };
 
 /** Which context bar the effect at a grid position gets: a Tint bar
  * (RGB channels or chroma), the warm/cool Shade bar, or none. */
-export type BarGroup = TintGroup | "warmcool";
+export type BarGroup = TintGroup | "warmcool" | "hue";
 export function barGroupOfTile(layout: TileLayout, tile: number): BarGroup | null {
+  if (layout[tile] === "hue") return "hue";
   if (layout[tile] === "warmCool") return "warmcool";
   return tintGroupOfTile(layout, tile);
 }
@@ -55,7 +56,7 @@ export function barGroupOfTile(layout: TileLayout, tile: number): BarGroup | nul
 /** The region the chrome leaves clear, in CSS px. */
 export function clearRegion(size: ScreenSize, insets: ViewInsets) {
   return {
-    width: Math.max(1, size.width - insets.right),
+    width: Math.max(1, size.width - insets.left - insets.right),
     height: Math.max(1, size.height - insets.top - insets.bottom),
   };
 }
@@ -75,7 +76,7 @@ export function fitAllZoom(size: ScreenSize, aspect: number, insets: ViewInsets)
  * chrome. A bottom sheet subtracts, pushing content up. */
 export function insetCenter(cx: number, cy: number, zoom: number, insets: ViewInsets) {
   return {
-    x: cx + insets.right / (2 * zoom),
+    x: cx + (insets.right - insets.left) / (2 * zoom),
     y: cy + (insets.top - insets.bottom) / (2 * zoom),
   };
 }

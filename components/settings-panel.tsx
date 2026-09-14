@@ -84,8 +84,6 @@ export function SettingsPanel({
   const tileLayout = useSettingsStore((s) => s.tileLayout);
   const setTileTransform = useSettingsStore((s) => s.setTileTransform);
   const setTileLayout = useSettingsStore((s) => s.setTileLayout);
-  const midLevel = useSettingsStore((s) => s.midLevel);
-  const setMidLevel = useSettingsStore((s) => s.setMidLevel);
   const neutralTolerance = useSettingsStore((s) => s.neutralTolerance);
   const setNeutralTolerance = useSettingsStore((s) => s.setNeutralTolerance);
   const chromaColorize = useSettingsStore((s) => s.chromaColorize);
@@ -246,32 +244,6 @@ export function SettingsPanel({
                 </Button>
               ))}
             </div>
-            {tileLayout.includes("mid") && (
-              <div className="space-y-1 pt-1">
-                <div className="flex items-baseline justify-between">
-                  <Label>
-                    Mid level
-                    <HelpTip>
-                      The brightness every pixel is pinned to. Higher reads
-                      punchier; past ~85% low-saturation areas start
-                      blowing out to white.
-                    </HelpTip>
-                  </Label>
-                  <span className="font-mono text-base text-muted-foreground">
-                    {Math.round(midLevel * 100)}%
-                  </span>
-                </div>
-                <Slider
-                  min={10}
-                  max={100}
-                  step={1}
-                  value={Math.round(midLevel * 100)}
-                  onValueChange={(v) =>
-                    setMidLevel((typeof v === "number" ? v : v[0]) / 100)
-                  }
-                />
-              </div>
-            )}
             <div className="space-y-1 pt-1">
               <div className="flex items-baseline justify-between">
                 <Label>

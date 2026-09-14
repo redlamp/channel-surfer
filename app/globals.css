@@ -169,3 +169,57 @@
     font-size: 1em;
   }
 }
+
+/* GSAP power2.inOut (cubic in-out), sampled at 1% intervals for CSS.
+ * Both menus and their attached toggles share the same curve/duration. */
+:root {
+  --panel-ease: linear(
+    0, 0.000004, 0.000032, 0.000108, 0.000256, 0.0005, 0.000864, 0.001372, 0.002048, 0.002916,
+    0.004, 0.005324, 0.006912, 0.008788, 0.010976, 0.0135, 0.016384, 0.019652, 0.023328, 0.027436,
+    0.032, 0.037044, 0.042592, 0.048668, 0.055296, 0.0625, 0.070304, 0.078732, 0.087808, 0.097556,
+    0.108, 0.119164, 0.131072, 0.143748, 0.157216, 0.1715, 0.186624, 0.202612, 0.219488, 0.237276,
+    0.256, 0.275684, 0.296352, 0.318028, 0.340736, 0.3645, 0.389344, 0.415292, 0.442368, 0.470596,
+    0.5, 0.529404, 0.557632, 0.584708, 0.610656, 0.6355, 0.659264, 0.681972, 0.703648, 0.724316,
+    0.744, 0.762724, 0.780512, 0.797388, 0.813376, 0.8285, 0.842784, 0.856252, 0.868928, 0.880836,
+    0.892, 0.902444, 0.912192, 0.921268, 0.929696, 0.9375, 0.944704, 0.951332, 0.957408, 0.962956,
+    0.968, 0.972564, 0.976672, 0.980348, 0.983616, 0.9865, 0.989024, 0.991212, 0.993088, 0.994676,
+    0.996, 0.997084, 0.997952, 0.998628, 0.999136, 0.9995, 0.999744, 0.999892, 0.999968, 0.999996,
+    1
+  );
+}
+.sliding-panel {
+  transition: transform 180ms var(--panel-ease), visibility 0s;
+}
+.sliding-panel[data-open="false"] {
+  visibility: hidden;
+  pointer-events: none;
+  transition: transform 180ms var(--panel-ease), visibility 0s 180ms;
+}
+.sliding-panel[data-open="false"][data-edge="left"] {
+  transform: translateX(calc(-100% + 1px));
+}
+.sliding-panel[data-open="false"][data-edge="right"] {
+  transform: translateX(calc(100% - 1px));
+}
+.sliding-panel[data-open="false"][data-edge="bottom"] {
+  transform: translateY(calc(100% + 12px));
+}
+.panel-toggle {
+  transition: left 180ms var(--panel-ease), right 180ms var(--panel-ease), top 180ms var(--panel-ease);
+}
+.panel-toggle-button,
+.panel-toggle-button[aria-expanded="true"] {
+  background-color: transparent;
+  color: var(--foreground);
+}
+.panel-toggle-button:hover,
+.panel-toggle-button[aria-expanded="true"]:hover {
+  background-color: var(--muted);
+}
+@media (prefers-reduced-motion: reduce) {
+  .sliding-panel,
+  .sliding-panel[data-open="false"],
+  .panel-toggle {
+    transition: none;
+  }
+}

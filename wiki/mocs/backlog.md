@@ -11,3 +11,5 @@
   keyboard behaviour — github.com/redlamp/channel-surfer#2
 - Warm/cool expectation in the e2e shader suite
   ([[decision-verification-harness]])
+
+- [Per-tile reset, undo/redo, and named layout presets](https://github.com/redlamp/channel-surfer/issues/3)

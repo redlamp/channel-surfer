@@ -28,6 +28,7 @@ interface UiState {
   canvasEl: HTMLCanvasElement | null;
   /** Tile currently under the cursor, null when not over the grid. */
   hoverTile: number | null;
+  lastHoverTile: number | null;
   /** The hexagon widget: docked in the header or floating anywhere.
    * x/y are the floating card's viewport position. */
   hexWidget: {
@@ -63,6 +64,7 @@ interface UiState {
 }
 
 export interface ViewInsets {
+  left: number;
   top: number;
   right: number;
   bottom: number;
@@ -79,6 +81,10 @@ export const canvasBridge = {
   meshDblAt: 0,
   invalidate: null as (() => void) | null,
   refit: null as (() => void) | null,
+  zoomBy: null as ((factor: number) => void) | null,
+  actualSize: null as (() => void) | null,
+  exportGrid: null as ((longEdge: number, names: boolean) => Promise<Blob>) | null,
+  tileNameEls: Array<HTMLDivElement | null>(9).fill(null),
   /** The 3x3 grid's current on-screen rect in DEVICE px (clamped to the
    * canvas), so PNG export can crop to the breakdown instead of the
    * whole full-bleed canvas with its letterbox and under-chrome areas. */
@@ -114,18 +120,19 @@ export const useUiStore = create<UiState>((set) => ({
   pinnedTile: null,
   canvasEl: null,
   hoverTile: null,
+  lastHoverTile: null,
   framedTile: null,
   isolate: false,
   hexWidget: { mode: "docked", size: 81, x: 24, y: 90 },
   hexDragging: false,
   hexOverDock: false,
-  viewInsets: { top: 48, right: 0, bottom: 0 },
+  viewInsets: { left: 0, top: 48, right: 0, bottom: 0 },
   setHoverColor: (hoverColor) =>
     set(hoverColor ? { hoverColor, lastHoverColor: hoverColor } : { hoverColor }),
   setPinnedColor: (pinnedColor) => set({ pinnedColor }),
   setPinnedTile: (pinnedTile) => set({ pinnedTile }),
   setCanvasEl: (canvasEl) => set({ canvasEl }),
-  setHoverTile: (hoverTile) => set({ hoverTile }),
+  setHoverTile: (hoverTile) => set(hoverTile === null ? { hoverTile } : { hoverTile, lastHoverTile: hoverTile }),
   setFramedTile: (framedTile) => set({ framedTile }),
   setIsolate: (isolate) => set({ isolate }),
   setHexWidget: (patch) =>

@@ -25,15 +25,19 @@ IndexedDB only.
 ```bash
 bun install
 bun run dev        # http://localhost:7847
-bun run typecheck
-bun run lint
+bun run check      # lint + typecheck + unit tests (tests/unit, ~0.1s)
+bun run test:e2e   # Playwright shader suite: reads pixels off the WebGL
+                   # canvas and checks every tile effect (tests/e2e, ~5s)
 ```
+
+CI runs all of the above on every push to `dev` and `main`.
 
 ## Deploy
 
 Pushes to `main` build a static export and publish to GitHub Pages at
 `/channel-surfer` (with `dev` built best-effort at `/channel-surfer/dev`).
-Branch flow: `main` ← `dev` ← `feature/*`; `dev` → `main` promotion is manual.
+Branch flow: `main` ← `dev` ← `feature/*`; `dev` → `main` promotion is manual
+and tagged (`v0.4.0` is current).
 
 ## Project wiki
 

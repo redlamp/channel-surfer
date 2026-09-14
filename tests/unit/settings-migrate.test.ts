@@ -45,3 +45,25 @@ describe("migrateSettings", () => {
     expect(s.tileLayout).toEqual([...DEFAULT_LAYOUT]);
   });
 });
+
+
+test("v8 hue variants migrate independently without changing their appearance", () => {
+  const s = migrateSettings({ tileLayout: ["source", "shaded", "flat", "lit", "mid"], midLevel: 0.42 }, 8);
+  expect(s.tileLayout.slice(0, 5)).toEqual(["source", "hue", "hue", "hue", "hue"]);
+  expect(s.hueTiles.slice(1, 5)).toEqual([
+    { saturation: 1, flat: false, brightness: 1 },
+    { saturation: 1, flat: true, brightness: 1 },
+    { saturation: "original", flat: true, brightness: 1 },
+    { saturation: "original", flat: true, brightness: 0.42 },
+  ]);
+});
+
+
+test("v9 saturation presets migrate to slider values", () => {
+  const s = migrateSettings({ hueTiles: [
+    { saturation: "mid", flat: true, brightness: 0.6 },
+    { saturation: "high", flat: false, brightness: 1 },
+    { saturation: "original", flat: true, brightness: 0.7 },
+  ] }, 9);
+  expect(s.hueTiles.map((h) => h.saturation)).toEqual([0.5, 1, "original"]);
+});

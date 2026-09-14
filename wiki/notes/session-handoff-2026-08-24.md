@@ -22,6 +22,11 @@ project and everything that matters lives in this wiki.
 - Conventions live in the repo root `AGENTS.md` (via `CLAUDE.md`):
   3-tier branching, port 7847, sRGB discipline, wiki rules.
 
+> **2026-09-01:** the open threads below are historical. Threads 1 and 4
+> are closed (the test plan is superseded by `tests/`; twilight shipped),
+> 3 is partly done (hot-swap shipped). Current state lives in the latest
+> daily note and [[backlog]].
+
 ## Open threads for the next session
 
 1. **Test plan sweep** — [[../test-plans/test-plan-2026-08-23-breakdown-mvp]]

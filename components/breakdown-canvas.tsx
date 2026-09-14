@@ -17,6 +17,7 @@ import {
   DecodeBadge,
   HexCard,
   TileTitle,
+  TileNames,
 } from "@/components/canvas/canvas-overlays";
 import {
   RMB_SLOP,
@@ -71,6 +72,7 @@ export function BreakdownCanvas() {
   const [tileMenu, setTileMenu] = useState<TileMenuState | null>(null);
   const [cursor, setCursor] = useState<CanvasCursor>("reticle");
   // Latched to the last bar-carrying tile hovered (see ContextBar).
+  const [barTile, setBarTile] = useState<number>(0);
   const [barGroup, setBarGroup] = useState<BarGroup | null>(null);
   // True while a newly selected image is decoding.
   const [decoding, setDecoding] = useState(false);
@@ -124,7 +126,7 @@ export function BreakdownCanvas() {
     useUiStore.getState().setHoverTile(t);
     if (t !== null) {
       const g = barGroupOfTile(useSettingsStore.getState().tileLayout, t);
-      if (g !== null) setBarGroup(g);
+      if (g !== null) { setBarGroup(g); setBarTile(t); }
     }
   };
 
@@ -189,6 +191,7 @@ export function BreakdownCanvas() {
         canvasBridge.refit?.();
       }}
     >
+      <TileNames />
       {decoding && <DecodeBadge />}
 
       {tileMenu && (
@@ -239,7 +242,7 @@ export function BreakdownCanvas() {
 
       <TileTitle hoverTile={hoverTile} />
       <HexCard />
-      <ContextBar group={barGroup} />
+      <ContextBar group={barGroup} tile={barTile} />
     </div>
   );
 }

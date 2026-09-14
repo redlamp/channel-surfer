@@ -7,6 +7,7 @@ import { canvasBridge, useUiStore } from "@/stores/ui-store";
 import {
   DEFAULT_TARGET_HUE,
   FRAME_MARGIN,
+  PLANE_H,
   clearRegion,
   fitAllZoom,
   gridScreenRect,
@@ -115,11 +116,32 @@ export function useCameraFraming(
   }, [controls, onCursor, sceneRef]);
 
   useEffect(() => {
+    const zoomTo = (zoom: number) => {
+      const { camera } = get();
+      if (!(camera instanceof THREE.OrthographicCamera)) return;
+      const insets = useUiStore.getState().viewInsets;
+      const offset = insetCenter(0, 0, camera.zoom, insets);
+      const center = insetCenter(camera.position.x - offset.x, camera.position.y - offset.y, zoom, insets);
+      applyView(center.x, center.y, zoom, true);
+    };
+    canvasBridge.zoomBy = (factor) => {
+      const { camera } = get();
+      if (camera instanceof THREE.OrthographicCamera)
+        zoomTo(Math.max(40, Math.min(20000, camera.zoom * factor)));
+    };
+    canvasBridge.actualSize = () => {
+      if (!texture) return;
+      const image = texture.image as HTMLCanvasElement;
+      const { gl } = get();
+      zoomTo(3 * image.height / (PLANE_H * gl.getPixelRatio()));
+    };
     canvasBridge.refit = () => unframe();
     return () => {
       canvasBridge.refit = null;
+      canvasBridge.zoomBy = null;
+      canvasBridge.actualSize = null;
     };
-  }, [unframe]);
+  }, [unframe, applyView, get, texture]);
 
   // Where the grid sits on the canvas right now, in device px — PNG
   // export crops to this instead of shipping the letterbox flanks and
@@ -166,7 +188,9 @@ export function useCameraFraming(
       return;
     }
     ui.setFramedTile(null);
-    const insets = ui.viewInsets;
+    // A new image starts at full workspace size; panels overlay it until
+    // an explicit refit (double-click outside the image) uses all insets.
+    const insets = { ...ui.viewInsets, left: 0, right: 0, bottom: 0 };
     const zoom = fitAllZoom(size, aspect, insets);
     const center = insetCenter(0, 0, zoom, insets);
     camera.position.set(center.x, center.y, 5);
@@ -180,17 +204,8 @@ export function useCameraFraming(
     invalidate();
   }, [texture, aspect, get, invalidate, frameTile, sceneRef]);
 
-  // Chrome changes (panel or sheet opening, header wrapping) refit the
-  // view into the new clear region — unless the user has taken the
-  // camera by hand since the last fit, in which case their view stands.
-  const insets = useUiStore((s) => s.viewInsets);
-  useEffect(() => {
-    if (!texture) return;
-    const st = sceneRef.current;
-    if (st.userMoved) return;
-    if (st.zoomedTile !== null) frameTile(st.zoomedTile, true);
-    else unframe(true);
-  }, [insets, texture, frameTile, unframe, sceneRef]);
+  // Panels overlay the existing view. Their insets are read only when
+  // the user requests framing/refitting, never to move the camera on toggle.
 
   // The camera tween, and focus-mode dissolve. Registered before the
   // uniform sync so a frame's outlines are computed from the camera

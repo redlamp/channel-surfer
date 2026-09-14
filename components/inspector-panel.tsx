@@ -1,9 +1,10 @@
 "use client";
 
+import { HueControls } from "@/components/hue-controls";
 import { HexDock } from "@/components/hex-widget";
 import { PanelReadout } from "@/components/color-readout";
 import { Segmented } from "@/components/ui/segmented";
-import { LibraryPanel, SelectionDetails } from "@/components/library-panel";
+import { SelectionDetails } from "@/components/library-panel";
 import { SettingsPanel } from "@/components/settings-panel";
 import { TILE_TRANSFORMS } from "@/lib/tile-transforms";
 import { GAMUT_LABEL, useDisplayGamut } from "@/lib/display-gamut";
@@ -11,11 +12,10 @@ import { useSettingsStore } from "@/stores/settings-store";
 import { useUiStore } from "@/stores/ui-store";
 import { cn } from "@/lib/utils";
 
-export type PanelTab = "inspect" | "library" | "settings";
+export type PanelTab = "inspect" | "settings";
 
 const TABS: { key: PanelTab; label: string }[] = [
   { key: "inspect", label: "Inspect" },
-  { key: "library", label: "Library" },
   { key: "settings", label: "Settings" },
 ];
 
@@ -49,7 +49,7 @@ function beginHexResize(e: React.PointerEvent<HTMLElement>) {
 /** The active tile's own toggle (the same control its context bar
  * carries), pinned in the panel so a FOCUSED tile's setting can be
  * changed without chasing the bar. */
-function TileSubSetting({ tileKey }: { tileKey: string | null }) {
+function TileSubSetting({ tileKey, tile }: { tileKey: string | null; tile: number | null }) {
   const warmCoolShade = useSettingsStore((s) => s.warmCoolShade);
   const setWarmCoolShade = useSettingsStore((s) => s.setWarmCoolShade);
   const chromaColorize = useSettingsStore((s) => s.chromaColorize);
@@ -59,6 +59,7 @@ function TileSubSetting({ tileKey }: { tileKey: string | null }) {
 
   let label: string;
   let control: React.ReactNode;
+  if (tileKey === "hue" && tile !== null) return <HueControls tile={tile} />;
   if (tileKey === "warmCool") {
     label = "Shade";
     control = (
@@ -145,7 +146,9 @@ function InspectTab() {
   // Focus wins, then live hover, then the pin-selected tile — so a pin
   // keeps its tile's details (and sub-setting) editable here without
   // framing it.
-  const labelTile = framedTile ?? hoverTile ?? pinnedTile;
+  const lastHoverTile = useUiStore((s) => s.lastHoverTile);
+  const showTileControls = useSettingsStore((s) => s.showTileControls);
+  const labelTile = framedTile ?? hoverTile ?? pinnedTile ?? lastHoverTile;
   const tileKey = labelTile === null ? null : tileLayout[labelTile];
   const tileName =
     tileKey === null ? "—" : TILE_TRANSFORMS[tileKey].name;
@@ -167,7 +170,11 @@ function InspectTab() {
         <span className="text-sm text-muted-foreground">Tile</span>
         <span className="truncate text-base">{tileName}</span>
       </div>
-      <TileSubSetting tileKey={tileKey} />
+      {showTileControls && <section aria-label="Selected tile controls" className="rounded-md border border-border bg-surface-inset p-2 font-mono">
+        <TileSubSetting tileKey={tileKey} tile={labelTile} />
+        {tileKey === null && <p className="text-sm text-muted-foreground">Hover or select a tile to edit its controls.</p>}
+        {tileKey !== null && !["hue", "warmCool", "chroma", "red", "green", "blue"].includes(tileKey) && <p className="text-sm text-muted-foreground">This tile has no additional controls.</p>}
+      </section>}
       {/* Spacer: everything below aligns to the bottom of the panel. */}
       <div className="min-h-2 flex-1" />
       <hr className="border-border" />
@@ -209,7 +216,7 @@ function beginPanelResize(e: React.PointerEvent<HTMLElement>) {
 /**
  * The right-side overlay panel from the layout redesign: floats over
  * the display area (translucent, blurred) rather than taking layout
- * space, with the color inspector, media library, and settings as
+ * space, with the color inspector and settings as
  * tabs. Toggled from the header's panel-right button; one width for
  * every tab, user-resizable by its left edge. On narrow windows it is
  * a bottom sheet instead (`sheet`), full width and a fixed share of
@@ -220,11 +227,13 @@ export function InspectorPanel({
   onTab,
   onClose,
   sheet = false,
+  open,
 }: {
   tab: PanelTab;
   onTab: (tab: PanelTab) => void;
   onClose: () => void;
   sheet?: boolean;
+  open: boolean;
 }) {
   const panelWidth = useSettingsStore((s) => s.panelWidth);
   // Track the measured header height so a wrapped (two-line) header
@@ -232,9 +241,15 @@ export function InspectorPanel({
   const headerH = useUiStore((s) => s.viewInsets.top);
   return (
     <aside
+      data-open={open}
+      data-edge={sheet ? "bottom" : "right"}
+      aria-hidden={!open}
+      inert={!open}
+      id="inspector-panel"
+      aria-label="Inspector and settings"
       style={sheet ? undefined : { width: panelWidth, top: headerH + 12 }}
       className={cn(
-        "absolute z-20 flex flex-col overflow-hidden rounded-md border border-border bg-card/85 shadow-[var(--shadow-lg)] backdrop-blur-md",
+        "sliding-panel absolute z-20 flex flex-col overflow-hidden rounded-md border border-border bg-card/85 shadow-[var(--shadow-lg)] backdrop-blur-md",
         // The sheet's height must agree with SHEET_FRACTION in surfer-app.
         sheet ? "inset-x-3 bottom-3 h-[55dvh]" : "right-3 bottom-3",
       )}
@@ -265,7 +280,6 @@ export function InspectorPanel({
         ))}
       </div>
       {tab === "inspect" && <InspectTab />}
-      {tab === "library" && <LibraryPanel embedded onClose={onClose} />}
       {tab === "settings" && <SettingsPanel embedded onClose={onClose} />}
     </aside>
   );
