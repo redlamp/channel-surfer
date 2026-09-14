@@ -510,3 +510,20 @@ test("PNG export contains the full grid regardless of camera and panels", async 
   await page.getByRole("button", { name: "Save PNG", exact: true }).click();
   expect((await download).suggestedFilename()).toMatch(/channel-surfer-.*\.png$/);
 });
+
+
+test("Fit finishes promptly when animation frames are slow", async ({ page }) => {
+  await waitForGrid(page);
+  await page.getByRole("button", { name: "Actual size", exact: true }).click();
+  await page.evaluate(() => {
+    const requestFrame = window.requestAnimationFrame.bind(window);
+    window.requestAnimationFrame = (callback) => requestFrame(() => {
+      window.setTimeout(() => callback(performance.now()), 500);
+    });
+  });
+  await page.getByRole("button", { name: "Fit image", exact: true }).click();
+  await expect.poll(() => page.evaluate(() => {
+    const rect = (window as unknown as { __channelSurfer: { gridScreenRect: () => Rect } }).__channelSurfer.gridScreenRect();
+    return rect.x + rect.w;
+  }), { timeout: 5000 }).toBeLessThanOrEqual(928);
+});
