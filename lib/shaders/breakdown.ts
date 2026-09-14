@@ -52,6 +52,7 @@ uniform float uHueMapStyle;
 // TILE_TRANSFORMS in lib/tile-transforms.ts; applyTransform() below
 // switches on them, so any transform can sit on any tile.
 uniform float uTileTransform[9];
+uniform vec3 uHueSettings[9];
 // Brightness level the "mid" effect pins every pixel to, 0-1.
 uniform float uMidLevel;
 // Chroma below which a pixel counts as neutral, shared by every effect in
@@ -258,6 +259,16 @@ vec3 imageMid(vec3 color) {
   return hsv2rgb(vec3(hsv.x, hsv.y * colorfulness(color), uMidLevel));
 }
 
+// Per-tile saturation (negative = source), flat flag, brightness.
+vec3 imageAdjustHue(vec3 color, vec3 settings) {
+  vec3 hsv = rgb2hsv(color);
+  float saturation = settings.x < 0.0 ? hsv.y : settings.x;
+  float brightness = mix(hsv.z, settings.z, settings.y);
+  // Neutral pixels have no hue to saturate. Keep their brightness
+  // independent of saturation, including the slider's 100% endpoint.
+  return mix(vec3(brightness), hsv2rgb(vec3(hsv.x, saturation, brightness)), colorfulness(color));
+}
+
 /* "Chroma": how much colour is actually present, as HSB chroma
    (sat * val). No division by brightness, so shadow noise cannot be
    amplified the way saturation amplifies it.
@@ -430,7 +441,7 @@ vec3 imageVal(vec3 color) {
    the channel ink for the R/G/B effects and stays black for everything
    else, which keeps the black-to-color cross-fade travelling with the
    effect rather than with the bottom row. */
-vec3 applyTransform(float tid, vec3 color, out vec3 tint, out float tintGroup) {
+vec3 applyTransform(float tid, vec3 hueSettings, vec3 color, out vec3 tint, out float tintGroup) {
   tint = vec3(0.0);
   tintGroup = 0.0;
   int id = int(tid + 0.5);
@@ -454,6 +465,7 @@ vec3 applyTransform(float tid, vec3 color, out vec3 tint, out float tintGroup) {
   if (id == 17) return imageValueHsb(color);
   if (id == 18) return imageLightHsl(color);
   if (id == 19) return imageFlatSteps(color);
+  if (id == 20) return imageAdjustHue(color, hueSettings);
   return imageSource(color);
 }
 
@@ -491,15 +503,16 @@ void main() {
   // Which effect this tile is carrying. A loop over a constant range is
   // how ESSL 1.00 permits indexing a uniform array by a computed value.
   float tid = 0.0;
+  vec3 hueSettings = vec3(1.0, 0.0, 1.0);
   for (int i = 0; i < 9; i++) {
-    if (i == tileIndex) tid = uTileTransform[i];
+    if (i == tileIndex) { tid = uTileTransform[i]; hueSettings = uHueSettings[i]; }
   }
 
   vec3 tint = vec3(0.0);
   float tintGroup = 0.0;
   color = peek
     ? imageSource(color)
-    : applyTransform(tid, color, tint, tintGroup);
+    : applyTransform(tid, hueSettings, color, tint, tintGroup);
   bool tintTile = !peek && tintGroup > 0.5;
   // Group 2 is chroma, which has its own control; everything else tinted
   // follows the RGB channels.

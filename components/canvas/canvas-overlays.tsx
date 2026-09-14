@@ -1,5 +1,6 @@
 "use client";
 
+import { HueControls } from "@/components/hue-controls";
 import { Focus } from "lucide-react";
 import { HexagonInner } from "@/components/color-hexagon";
 import { TILE_TRANSFORMS } from "@/lib/tile-transforms";
@@ -129,7 +130,7 @@ const TINT_OPTIONS = [
  * cursor off the tile and onto the bar clears the hover, which would
  * otherwise fall back to the wrong control.
  */
-export function ContextBar({ group }: { group: BarGroup | null }) {
+export function ContextBar({ group, tile }: { group: BarGroup | null; tile: number }) {
   const rgbColorize = useSettingsStore((s) => s.rgbColorize);
   const setRgbColorize = useSettingsStore((s) => s.setRgbColorize);
   const chromaColorize = useSettingsStore((s) => s.chromaColorize);
@@ -152,6 +153,13 @@ export function ContextBar({ group }: { group: BarGroup | null }) {
         window.setTimeout(() => canvasBridge.invalidate?.(), 50);
       }}
     >
+      {/* Cover the 8px gap (plus the border) so crossing to the controls
+          cannot hit the next canvas tile or expire the hover grace period.
+          As a child, this also participates in the panel's mouse enter/leave. */}
+      <span aria-hidden="true" className="absolute -top-2.5 inset-x-0 h-2.5" />
+      {group === "hue" ? (
+        <div className="w-64 max-w-[calc(100vw-40px)]"><HueControls tile={tile} /></div>
+      ) : <>
       <span className="text-muted-foreground">
         {group === "warmcool" ? "Shade" : "Tint"}
       </span>
@@ -162,6 +170,21 @@ export function ContextBar({ group }: { group: BarGroup | null }) {
       ) : (
         <BarToggle options={TINT_OPTIONS} value={rgbColorize} onChange={setRgbColorize} />
       )}
+      </>}
     </div>
   );
+}
+
+
+export function TileNames() {
+  const show = useSettingsStore((s) => s.showTileNames);
+  const layout = useSettingsStore((s) => s.tileLayout);
+  if (!show) return null;
+  return layout.map((key, tile) => (
+    <div key={tile} ref={(el) => { canvasBridge.tileNameEls[tile] = el; }}
+      data-tile-name={tile} style={{ display: "none" }}
+      className="pointer-events-none absolute z-10 -translate-x-1/2 truncate rounded-sm bg-white/80 px-2 py-0.5 text-center font-mono text-sm text-black shadow-sm backdrop-blur-sm">
+      {TILE_TRANSFORMS[key].name}
+    </div>
+  ));
 }

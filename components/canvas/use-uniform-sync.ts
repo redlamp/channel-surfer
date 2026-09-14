@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
+import { exportBreakdown } from "@/lib/export-breakdown";
 import { TILE_TRANSFORMS } from "@/lib/tile-transforms";
 import { useSettingsStore } from "@/stores/settings-store";
 import { canvasBridge, useUiStore } from "@/stores/ui-store";
@@ -24,6 +25,16 @@ export function useUniformSync(
 ) {
   const invalidate = useThree((s) => s.invalidate);
   const materialRef = useRef<THREE.ShaderMaterial>(null);
+  const renderer = useThree((s) => s.gl);
+  useEffect(() => {
+    canvasBridge.exportGrid = async (longEdge, names) => {
+      const material = materialRef.current;
+      if (!material) throw new Error("The image is still loading.");
+      return exportBreakdown(renderer, material.uniforms, aspect, longEdge, names);
+    };
+    return () => { canvasBridge.exportGrid = null; };
+  }, [renderer, aspect, texture]);
+
 
   // Hand the DOM shell a way to request frames (context bar handlers).
   useEffect(() => {
@@ -48,6 +59,7 @@ export function useUniformSync(
   const colorModel = useSettingsStore((s) => s.colorModel);
   const hueMapStyle = useSettingsStore((s) => s.hueMapStyle);
   const tileLayout = useSettingsStore((s) => s.tileLayout);
+  const hueTiles = useSettingsStore((s) => s.hueTiles);
   const midLevel = useSettingsStore((s) => s.midLevel);
   const neutralTolerance = useSettingsStore((s) => s.neutralTolerance);
   const colorMath = useSettingsStore((s) => s.colorMath);
@@ -62,6 +74,7 @@ export function useUniformSync(
     hueMapStyle,
     tileLayout,
     midLevel,
+    hueTiles,
     neutralTolerance,
     colorMath,
     chromaSmooth,
@@ -107,6 +120,7 @@ export function useUniformSync(
       uPeekTile: { value: -1 },
       uColorModel: { value: s.colorModel === "hsl" ? 1 : 0 },
       uHueMapStyle: { value: HUE_STYLE_INDEX[s.hueMapStyle] },
+      uHueSettings: { value: s.hueTiles.map((h) => new THREE.Vector3(h.saturation === "original" ? -1 : h.saturation, h.flat ? 1 : 0, h.brightness)) },
       uMidLevel: { value: s.midLevel },
       uNeutralTol: { value: s.neutralTolerance },
       uTileTransform: { value: s.tileLayout.map((k) => TILE_TRANSFORMS[k].id) },
@@ -145,6 +159,8 @@ export function useUniformSync(
     mat.uniforms.uNeutralTol.value = settings.neutralTolerance;
     const slots = mat.uniforms.uTileTransform.value as number[];
     for (let i = 0; i < slots.length; i++) {
+      const h = settings.hueTiles[i];
+      mat.uniforms.uHueSettings.value[i].set(h.saturation === "original" ? -1 : h.saturation, h.flat ? 1 : 0, h.brightness);
       slots[i] = TILE_TRANSFORMS[settings.tileLayout[i]].id;
     }
 
