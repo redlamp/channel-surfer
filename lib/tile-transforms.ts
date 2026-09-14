@@ -31,6 +31,7 @@ export interface TileTransform {
 }
 
 export const TILE_TRANSFORMS = {
+  hue: { id: 20, short: "Hue", name: "Hue", blurb: "Adjust saturation, shading and brightness" },
   source: { id: 0, short: "Source", name: "Source", blurb: "Untouched" },
   shaded: {
     id: 1,
@@ -126,7 +127,26 @@ export const TILE_TRANSFORMS = {
 
 export type TransformKey = keyof typeof TILE_TRANSFORMS;
 
-export const TRANSFORM_KEYS = Object.keys(TILE_TRANSFORMS) as TransformKey[];
+// Legacy keys remain readable for old layouts and preset recipes only.
+export const LEGACY_HUE_KEYS: readonly TransformKey[] = ["shaded", "flat", "lit", "mid"];
+export const TRANSFORM_KEYS = (Object.keys(TILE_TRANSFORMS) as TransformKey[])
+  .filter((key) => !LEGACY_HUE_KEYS.includes(key));
+
+export interface HueSettings {
+  saturation: "original" | number;
+  /** Last uniform value, restored when Uniform is enabled again. */
+  lastSaturation?: number;
+  flat: boolean;
+  brightness: number;
+}
+export const DEFAULT_HUE: HueSettings = { saturation: 1, flat: false, brightness: 1 };
+export function hueSettingsFor(key: TransformKey, midLevel = 0.7): HueSettings {
+  return {
+    saturation: key === "lit" || key === "mid" ? "original" : 1,
+    flat: key === "flat" || key === "lit" || key === "mid",
+    brightness: key === "mid" ? midLevel : 1,
+  };
+}
 
 /** Nine grid positions, reading order (row-major from the top-left). */
 export type TileLayout = readonly TransformKey[];
@@ -207,7 +227,7 @@ export const TRANSFORM_MENU: TransformMenuGroup[] = [
     label: "Hue",
     runs: [
       ["warmCool", "chroma", "flatSteps"],
-      ["shaded", "flat", "lit", "mid", "families", "contours", "hueMap"],
+      ["hue", "families", "contours", "hueMap"],
     ],
   },
   {

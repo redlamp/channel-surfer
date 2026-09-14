@@ -1,9 +1,10 @@
 "use client";
 
+import { useEffect } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { useSettingsStore } from "@/stores/settings-store";
-import { canvasBridge } from "@/stores/ui-store";
+import { canvasBridge, useUiStore } from "@/stores/ui-store";
 import {
   TINT_BAR_GRACE_MS,
   barGroupOfTile,
@@ -22,6 +23,8 @@ import type { SceneRef } from "./scene-state";
  */
 export function useOverlayPlacement(sceneRef: SceneRef, aspect: number) {
   const invalidate = useThree((s) => s.invalidate);
+  const showNames = useSettingsStore((s) => s.showTileNames);
+  useEffect(() => { invalidate(); }, [showNames, invalidate]);
 
   useFrame((state, rawDt) => {
     if (!(state.camera instanceof THREE.OrthographicCamera)) return;
@@ -29,6 +32,18 @@ export function useOverlayPlacement(sceneRef: SceneRef, aspect: number) {
     const st = sceneRef.current;
     const dt = Math.min(rawDt, 1 / 30);
     let active = false;
+
+    const ui = useUiStore.getState();
+    canvasBridge.tileNameEls.forEach((el, tile) => {
+      if (!el) return;
+      const box = tileScreenBox(tile, aspect, cam, state.size);
+      const hidden = (ui.isolate && ui.framedTile !== null && ui.framedTile !== tile)
+        || box.x1 <= 0 || box.x0 >= state.size.width || box.y1 <= ui.viewInsets.top || box.y0 >= state.size.height;
+      el.style.display = hidden ? "none" : "block";
+      el.style.left = `${(box.x0 + box.x1) / 2}px`;
+      el.style.top = `${box.y0 + 8}px`;
+      el.style.maxWidth = `${Math.max(0, box.x1 - box.x0 - 16)}px`;
+    });
 
     // Context bar: pinned below the last hovered bar-carrying tile, with
     // a short grace window so the cursor can cross the gap onto the bar.
@@ -50,8 +65,8 @@ export function useOverlayPlacement(sceneRef: SceneRef, aspect: number) {
       if (visible) {
         const b = tileScreenBox(st.lastBarTile as number, aspect, cam, state.size);
         bar.style.display = "flex";
-        bar.style.left = `${(b.x0 + b.x1) / 2}px`;
-        bar.style.top = `${Math.min(b.y1 + 8, state.size.height - 44)}px`;
+        bar.style.left = `${Math.max(bar.offsetWidth / 2 + 8, Math.min((b.x0 + b.x1) / 2, state.size.width - bar.offsetWidth / 2 - 8))}px`;
+        bar.style.top = `${Math.min(b.y1 + 8, state.size.height - bar.offsetHeight - 8)}px`;
       } else {
         bar.style.display = "none";
       }

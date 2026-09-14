@@ -18,7 +18,7 @@ import { DEFAULT_LAYOUT } from "@/lib/tile-transforms";
 const cam = (x: number, y: number, zoom: number) =>
   ({ zoom, position: { x, y } }) as unknown as THREE.OrthographicCamera;
 
-const NO_INSETS = { top: 0, right: 0, bottom: 0 };
+const NO_INSETS = { left: 0, top: 0, right: 0, bottom: 0 };
 
 describe("tileFromUv", () => {
   test("reading order runs from the top-left", () => {
@@ -53,8 +53,8 @@ describe("tileRect", () => {
 describe("fit and insets", () => {
   const size = { width: 1200, height: 800 };
   test("clearRegion subtracts every edge", () => {
-    expect(clearRegion(size, { top: 50, right: 300, bottom: 100 })).toEqual({
-      width: 900,
+    expect(clearRegion(size, { left: 200, top: 50, right: 300, bottom: 100 })).toEqual({
+      width: 700,
       height: 650,
     });
   });
@@ -66,15 +66,19 @@ describe("fit and insets", () => {
   });
   test("insetCenter pushes content away from the chrome", () => {
     const zoom = 100;
-    const right = insetCenter(0, 0, zoom, { top: 0, right: 300, bottom: 0 });
+    const right = insetCenter(0, 0, zoom, { left: 0, top: 0, right: 300, bottom: 0 });
     expect(right.x).toBeCloseTo(1.5);
-    const top = insetCenter(0, 0, zoom, { top: 50, right: 0, bottom: 0 });
+    const left = insetCenter(0, 0, zoom, { left: 300, top: 0, right: 0, bottom: 0 });
+    expect(left.x).toBeCloseTo(-1.5);
+    const both = insetCenter(0, 0, zoom, { left: 300, top: 0, right: 300, bottom: 0 });
+    expect(both.x).toBe(0);
+    const top = insetCenter(0, 0, zoom, { left: 0, top: 50, right: 0, bottom: 0 });
     expect(top.y).toBeCloseTo(0.25);
-    const bottom = insetCenter(0, 0, zoom, { top: 0, right: 0, bottom: 50 });
+    const bottom = insetCenter(0, 0, zoom, { left: 0, top: 0, right: 0, bottom: 50 });
     expect(bottom.y).toBeCloseTo(-0.25);
   });
   test("a fitted grid is centered in the clear region", () => {
-    const insets = { top: 48, right: 352, bottom: 0 };
+    const insets = { left: 0, top: 48, right: 352, bottom: 0 };
     const aspect = 16 / 9;
     const zoom = fitAllZoom(size, aspect, insets);
     const c = insetCenter(0, 0, zoom, insets);

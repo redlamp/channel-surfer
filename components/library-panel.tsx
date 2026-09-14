@@ -3,7 +3,9 @@
 import { useRef } from "react";
 import { ImageUp, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
+import { useUiStore } from "@/stores/ui-store";
+
+export const LIBRARY_WIDTH = 300;
 import { useSourceStore, type MediaItem } from "@/stores/source-store";
 import { formatBytes } from "@/lib/image-details";
 import { cn } from "@/lib/utils";
@@ -158,16 +160,16 @@ export function SelectionDetails() {
   );
 }
 
-/** Right-side library: every image dropped into the app, plus the demo,
+/** Left-side library: every image dropped into the app, plus the demo,
  * with header-parsed details for the current selection. */
 export function LibraryPanel({
   onClose,
-  embedded = false,
+  sheet = false,
+  open,
 }: {
   onClose: () => void;
-  /** Rendered inside the inspector panel: the panel shell supplies the
-   * frame and the tab bar stands in for the title/close header. */
-  embedded?: boolean;
+  sheet?: boolean;
+  open: boolean;
 }) {
   const items = useSourceStore((s) => s.items);
   const demoItems = useSourceStore((s) => s.demoItems);
@@ -176,16 +178,22 @@ export function LibraryPanel({
   const remove = useSourceStore((s) => s.remove);
   const loadFiles = useSourceStore((s) => s.loadFiles);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const headerH = useUiStore((s) => s.viewInsets.top);
 
   return (
     <aside
-      className={
-        embedded
-          ? "flex min-h-0 w-full flex-1 flex-col overflow-hidden"
-          : "flex w-72 shrink-0 flex-col overflow-hidden rounded-md border border-border bg-card shadow-[var(--shadow-sm)]"
-      }
+      data-open={open}
+      data-edge={sheet ? "bottom" : "left"}
+      aria-hidden={!open}
+      inert={!open}
+      id="media-library"
+      aria-label="Media library"
+      style={sheet ? undefined : { width: LIBRARY_WIDTH, top: headerH + 12 }}
+      className={cn(
+        "sliding-panel absolute z-20 flex flex-col overflow-hidden rounded-md border border-border bg-card/85 shadow-[var(--shadow-lg)] backdrop-blur-md",
+        sheet ? "inset-x-3 bottom-3 h-[55dvh]" : "left-3 bottom-3",
+      )}
     >
-      {!embedded && (
         <div className="flex items-center justify-between border-b border-border px-3 py-2">
           <h2 className="text-base font-semibold">Media Library</h2>
           <div className="flex items-center gap-2">
@@ -202,7 +210,6 @@ export function LibraryPanel({
             </button>
           </div>
         </div>
-      )}
 
       <div className="border-b border-border p-1.5">
         <Button
@@ -258,8 +265,6 @@ export function LibraryPanel({
         )}
       </div>
 
-      <Separator />
-      <SelectionDetails />
     </aside>
   );
 }

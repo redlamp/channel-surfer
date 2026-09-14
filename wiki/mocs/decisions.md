@@ -5,3 +5,9 @@
 - [[decision-chroma-neutral-detection]] — adopted 2026-08-27 (v0.3)
 - [[decision-chroma-subsampling-response]] — adopted 2026-08-27 (v0.3)
 - [[decision-verification-harness]] — adopted 2026-09-01
+
+- [[decision-hue-tile-controls]] - adopted 2026-09-14
+
+- [[decision-library-left-panel]] - adopted 2026-09-14
+
+- [[decision-display-tools-and-export]] - adopted 2026-09-14

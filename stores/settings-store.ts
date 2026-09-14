@@ -4,6 +4,10 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import {
   DEFAULT_LAYOUT,
+  DEFAULT_HUE,
+  LEGACY_HUE_KEYS,
+  hueSettingsFor,
+  type HueSettings,
   normalizeLayout,
   type TransformKey,
 } from "@/lib/tile-transforms";
@@ -48,6 +52,7 @@ export interface DisplaySettings {
   tileLayout: TransformKey[];
   /** Brightness the "mid" effect pins every pixel to, 0-1. */
   midLevel: number;
+  hueTiles: HueSettings[];
   /** Chroma (max-min) below which a pixel counts as neutral, shared by
    * every hue-family effect. Stored 0-1; the UI talks in 255ths. */
   neutralTolerance: number;
@@ -60,6 +65,8 @@ export interface DisplaySettings {
   warmCoolShade: boolean;
   /** Show the color-taylor style hex/HSB derivation steps for the hovered pixel. */
   showColorSteps: boolean;
+  showTileNames: boolean;
+  showTileControls: boolean;
   /** Readout RGB values as 0.0-1.0 floats instead of 0-255 ints. */
   rgbFloat: boolean;
   /** Show the color-taylor Hexagon (HSB wheel) as a hover card. */
@@ -89,10 +96,13 @@ export const DISPLAY_DEFAULTS: DisplaySettings = {
   hueMapStyle: "twilight",
   tileLayout: [...DEFAULT_LAYOUT],
   midLevel: 0.7,
+  hueTiles: Array.from({ length: 9 }, () => ({ ...DEFAULT_HUE })),
   neutralTolerance: 5 / 255,
   chromaSmooth: false,
   warmCoolShade: true,
   showColorSteps: false,
+  showTileNames: false,
+  showTileControls: false,
   rgbFloat: false,
   showColorHexagon: false,
   colorMath: "srgb",
@@ -116,12 +126,15 @@ interface SettingsActions {
   /** Load a whole grid at once (a preset, or a reset). */
   setTileLayout: (layout: readonly TransformKey[]) => void;
   setMidLevel: (level: number) => void;
+  setHueTile: (tile: number, patch: Partial<HueSettings>) => void;
   setNeutralTolerance: (tol: number) => void;
   setChromaSmooth: (on: boolean) => void;
   setWarmCoolShade: (on: boolean) => void;
   setPanelWidth: (px: number) => void;
   setPanelHexSize: (px: number) => void;
   setShowColorSteps: (on: boolean) => void;
+  setShowTileNames: (on: boolean) => void;
+  setShowTileControls: (on: boolean) => void;
   setRgbFloat: (on: boolean) => void;
   setLabs: (on: boolean) => void;
   setShowColorHexagon: (on: boolean) => void;
@@ -150,7 +163,26 @@ export const useSettingsStore = create<SettingsState>()(
           tileLayout[index] = key;
           return { tileLayout };
         }),
-      setTileLayout: (layout) => set({ tileLayout: normalizeLayout(layout) }),
+      setTileLayout: (layout) => set((state) => {
+        const normalized = normalizeLayout(layout);
+        return {
+          tileLayout: normalized.map((key) => LEGACY_HUE_KEYS.includes(key) ? "hue" : key),
+          hueTiles: normalized.map((key, i) => LEGACY_HUE_KEYS.includes(key)
+            ? hueSettingsFor(key, state.midLevel) : state.hueTiles[i]),
+        };
+      }),
+      setHueTile: (tile, patch) => set((state) => ({
+        hueTiles: state.hueTiles.map((settings, i) => i === tile ? {
+          ...settings, ...patch,
+          lastSaturation: patch.saturation === "original" && typeof settings.saturation === "number"
+            ? settings.saturation : settings.lastSaturation,
+          saturation: patch.saturation === "original" ? "original"
+            : typeof patch.saturation === "number" && Number.isFinite(patch.saturation)
+              ? Math.min(1, Math.max(0, patch.saturation)) : settings.saturation,
+          brightness: Number.isFinite(patch.brightness)
+            ? Math.min(1, Math.max(0, patch.brightness!)) : settings.brightness,
+        } : settings),
+      })),
       setMidLevel: (midLevel) =>
         set({ midLevel: Math.min(Math.max(midLevel, 0), 1) }),
       setNeutralTolerance: (neutralTolerance) =>
@@ -162,6 +194,8 @@ export const useSettingsStore = create<SettingsState>()(
       setPanelHexSize: (panelHexSize) =>
         set({ panelHexSize: Math.min(Math.max(panelHexSize, 80), 320) }),
       setShowColorSteps: (showColorSteps) => set({ showColorSteps }),
+      setShowTileNames: (showTileNames) => set({ showTileNames }),
+      setShowTileControls: (showTileControls) => set({ showTileControls }),
       setRgbFloat: (rgbFloat) => set({ rgbFloat }),
       setLabs: (labs) => set({ labs }),
       setShowColorHexagon: (showColorHexagon) => set({ showColorHexagon }),
