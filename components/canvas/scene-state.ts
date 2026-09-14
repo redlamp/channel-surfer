@@ -19,6 +19,8 @@ export interface SceneState {
 
   /* --- camera framing (use-camera-framing) --- */
   viewGoal: ViewGoal | null;
+  /** Wall-clock time of the last camera tween update. */
+  viewUpdatedAt: number;
   /** Tile currently framed, or null in grid view. */
   zoomedTile: number | null;
   /** Camera zoom at which the current framing landed. */
@@ -59,6 +61,7 @@ export function useSceneRef(): SceneRef {
   return useRef<SceneState>({
     readCtx: null,
     viewGoal: null,
+    viewUpdatedAt: 0,
     zoomedTile: null,
     framedZoom: 0,
     userMoved: false,

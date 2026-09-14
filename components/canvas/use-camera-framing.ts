@@ -54,6 +54,7 @@ export function useCameraFraming(
         (controls as ControlsLike)?.target?.set(x, y, 0);
       } else {
         st.viewGoal = { x, y, zoom };
+        st.viewUpdatedAt = performance.now();
       }
       invalidate();
     },
@@ -210,16 +211,19 @@ export function useCameraFraming(
   // The camera tween, and focus-mode dissolve. Registered before the
   // uniform sync so a frame's outlines are computed from the camera
   // position they will be drawn at.
-  useFrame((state, rawDt) => {
-    // Demand-mode frames can arrive after long idle gaps; an unclamped
-    // delta makes every ease complete in one frame. Clamp to a 30fps step.
+  useFrame((state) => {
     const st = sceneRef.current;
-    const dt = Math.min(rawDt, 1 / 30);
     let active = false;
 
     const goal = st.viewGoal;
     if (goal && state.camera instanceof THREE.OrthographicCamera) {
       const camera = state.camera;
+      // Measure from the action/previous update rather than R3F's frame
+      // delta: idle time cannot skip a fresh tween, and low FPS cannot
+      // stretch its duration into several seconds.
+      const now = performance.now();
+      const dt = Math.max(0, now - st.viewUpdatedAt) / 1000;
+      st.viewUpdatedAt = now;
       const k = 1 - Math.exp(-8 * dt);
       camera.position.x += (goal.x - camera.position.x) * k;
       camera.position.y += (goal.y - camera.position.y) * k;
