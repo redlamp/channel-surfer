@@ -17,24 +17,19 @@ GLSL shader. Port of the Gigi prototype in `C:\workspace\ImageView`
 ## Conventions
 
 - Stack: Next.js 16 + R3F + shadcn (base-ui) + Tailwind v4 + zustand. Bun.
-- Branch flow: `main` ← `dev` ← `feature/*`, `--no-ff` merges, no squash.
-  `dev` → `main` promotion only on Taylor's explicit go-ahead. `main` is the
-  GitHub Pages deploy source.
 - Dev server: `bun run dev` on port 7847.
 - Static-export constraints: no server actions, no Next image optimization,
-  images stay client-side (IndexedDB only — never uploaded anywhere).
-- Project knowledge lives in `wiki/` (Obsidian vault) — read
-  `wiki/CLAUDE.md` for conventions, `wiki/index.md` for the map. Decisions
-  and rationale go in `wiki/notes/`, what-happened-today in `wiki/daily/`.
+  images stay client-side (IndexedDB only, never uploaded anywhere).
+- Wiki: start at `wiki/index.md`; conventions in `wiki/AGENTS.md`.
 - sRGB discipline: textures load as sRGB (shader samples are linear); the
   fragment shader converts linear → sRGB explicitly at the end, matching the
   original HLSL. Don't add three's built-in color-space chunks on top.
 
 ## Verifying changes (cheapest first)
 
-1. `bun run check` — lint, typecheck, and the unit suite (`tests/unit`,
+1. `bun run check`: lint, typecheck, and the unit suite (`tests/unit`,
    ~0.1s). Run it before every commit; read only the tail of its output.
-2. `bun run test:e2e` — the Playwright shader suite (`tests/e2e`, ~5s
+2. `bun run test:e2e`: the Playwright shader suite (`tests/e2e`, ~5s
    with the dev server already up). It reads pixels back off the WebGL
    canvas and checks every tile effect against the source pixels, so a
    shader or dispatcher change is verified by this, NOT by screenshots.
@@ -42,7 +37,7 @@ GLSL shader. Port of the Gigi prototype in `C:\workspace\ImageView`
    an effect.
 3. Screenshots in the Browser pane are for layout and UI only. The pane
    pauses requestAnimationFrame while hidden, so WebGL frames and camera
-   tweens stall between screenshots — do not read that as a bug.
+   tweens stall between screenshots; do not read that as a bug.
 
 CI (`.github/workflows/ci.yml`) runs all three on push to `dev`/`main`;
-the Pages deploy stays gated on typecheck alone.
+the GitHub Pages deploy (from `main`) stays gated on typecheck alone.
